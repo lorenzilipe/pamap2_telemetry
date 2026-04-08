@@ -107,6 +107,29 @@ This avoids most drift.
 
 ---
 
+## Language and reasoning standard
+
+For this project, ask Copilot to follow these writing rules in every response and generated artifact:
+
+- use simple professional language,
+- keep wording understandable at high-school reading level,
+- avoid unnecessary jargon,
+- include the reason (why) for each high-level decision,
+- mention key tradeoffs whenever a high-level choice is made.
+
+Apply this standard to:
+- notebook markdown,
+- documentation,
+- code comments,
+- chat summaries,
+- commit and PR text.
+
+Useful one-line reminder to paste into prompts:
+
+Use simple professional language at high-school reading level, and include the why and key tradeoffs for every high-level decision.
+
+---
+
 ## Rules for asking coding questions
 
 When the task is about code, always specify:

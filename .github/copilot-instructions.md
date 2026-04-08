@@ -79,6 +79,13 @@ Follow these preferences consistently:
 - Prefer transparent transformations over clever one-liners.
 - For non-trivial logic, explain the assumptions near the code.
 
+Language and reasoning standards for all project text:
+- Use simple professional language in all natural-language outputs.
+- Keep wording understandable at high-school reading level.
+- Apply this to notebook markdown, documentation, code comments, commit/PR text, and chat summaries.
+- For every high-level decision, explicitly include the reason (`why`) and key tradeoffs.
+- Avoid unexplained jargon whenever a plain alternative exists.
+
 When writing analysis code:
 
 - guard against leakage

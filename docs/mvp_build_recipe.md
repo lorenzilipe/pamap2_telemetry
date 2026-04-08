@@ -414,6 +414,28 @@ Use a simple, documented choice:
 Write it to:
 - `data/interim/pamap2_per_second.parquet`
 
+## 2.7. Record a deferred feature ablation check
+Do not expand scope during Phase 1 or 2, but record this exact ablation for later modeling work.
+
+Design to run in Phase 3/4:
+- Setup A (baseline): magnitude-only telemetry features (current design)
+- Setup B (candidate): magnitude features plus a small axis subset from the same sensors
+
+Rules for a fair comparison:
+- use the same subject-held-out split
+- use the same preprocessing and target definitions
+- use the same models and random seed
+- compare only feature-set differences
+
+Primary comparison metrics:
+- regression: MAE and RMSE
+- classification: macro F1 and confusion matrix
+- uncertainty: empirical coverage and average interval width
+
+Decision rule:
+- keep axis expansion only if it gives a clear, repeatable gain on held-out subjects
+- otherwise keep magnitude-only for simplicity and interpretability
+
 ### Definition of done for Phase 2
 You have one clean per-second table with one row per subject-second.
 
