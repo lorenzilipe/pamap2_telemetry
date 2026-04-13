@@ -62,6 +62,11 @@ def _build_regression_model_specs(random_seed: int) -> dict[str, Any]:
     }
 
 
+def build_regression_model_specs(random_seed: int = RANDOM_SEED) -> dict[str, Any]:
+    """Public wrapper used by compact ablation workflows."""
+    return _build_regression_model_specs(random_seed)
+
+
 def _build_classification_model_specs(random_seed: int) -> dict[str, Any]:
     return {
         "logistic_regression": Pipeline(
@@ -103,6 +108,59 @@ def _fit_if_needed(model_name: str, model_obj: Any, x_df: pd.DataFrame, y: pd.Se
     fitted = clone(model_obj)
     fitted.fit(x_df, y)
     return fitted
+
+
+def run_grouped_regression_cv(
+    model_df: pd.DataFrame,
+    feature_cols: list[str],
+    target_col: str,
+    random_seed: int = RANDOM_SEED,
+    model_specs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run LOSO grouped CV for regression on an in-memory table."""
+    required_cols = {"subject_id", "timestamp_s", target_col, *feature_cols}
+    missing_required = sorted(required_cols.difference(set(model_df.columns)))
+    if missing_required:
+        raise ValueError(f"Missing required columns for grouped regression CV: {missing_required}")
+
+    eval_subset = model_df[["subject_id", "timestamp_s", *feature_cols, target_col]].copy()
+    valid_mask = eval_subset[[*feature_cols, target_col]].notna().all(axis=1)
+    eval_df = eval_subset.loc[valid_mask].reset_index(drop=True)
+
+    if eval_df.empty:
+        raise ValueError("Grouped regression CV has no rows after dropping missing feature or target values.")
+
+    duplicate_count = int(eval_df.duplicated(subset=["subject_id", "timestamp_s"]).sum())
+    if duplicate_count > 0:
+        raise ValueError(f"Found duplicate subject-second rows in grouped regression CV input: {duplicate_count}")
+
+    x_df = eval_df[feature_cols]
+    y = eval_df[target_col]
+    groups = eval_df["subject_id"].astype(int)
+
+    meta_cols = ["subject_id", "timestamp_s"]
+    optional_meta = ["activity_target", "activity_label"]
+    for col in optional_meta:
+        if col in model_df.columns and col not in meta_cols:
+            meta_cols.append(col)
+    meta_df = model_df.loc[valid_mask, meta_cols].reset_index(drop=True)
+
+    specs = model_specs if model_specs is not None else _build_regression_model_specs(random_seed)
+
+    fold_df, prediction_df = _run_grouped_cv_regression(
+        x_df=x_df,
+        y=y,
+        groups=groups,
+        meta_df=meta_df,
+        model_specs=specs,
+    )
+    summary_df = _summarize_regression_fold_metrics(fold_df)
+
+    return {
+        "fold": fold_df,
+        "summary": summary_df,
+        "predictions": prediction_df,
+    }
 
 
 def _run_grouped_cv_regression(
@@ -578,6 +636,7 @@ def run_grouped_evaluation(
     models_dir: Path,
     random_seed: int = RANDOM_SEED,
     alpha: float = ALPHA,
+    regression_target_col: str = "hr_target_30s",
 ) -> dict[str, pd.DataFrame]:
     if not processed_path.exists():
         raise FileNotFoundError(f"Missing processed model table: {processed_path}")
@@ -595,7 +654,7 @@ def run_grouped_evaluation(
         "activity_target",
         "activity_label",
         "heart_rate_bpm",
-        "hr_target_30s",
+        regression_target_col,
     ]
     missing_required = [column for column in required_columns if column not in model_df.columns]
     if missing_required:
@@ -612,12 +671,18 @@ def run_grouped_evaluation(
         "activity_id",
         "activity_label",
         "activity_target",
+        "heart_rate_observed_flag",
+        "heart_rate_fill_strategy",
         "hr_target_30s",
     }
-    feature_cols = [column for column in model_df.columns if column not in non_feature_cols]
+    feature_cols = [
+        column
+        for column in model_df.columns
+        if column not in non_feature_cols and not column.startswith("hr_target_")
+    ]
 
     x_df = model_df[feature_cols]
-    y_reg = model_df["hr_target_30s"]
+    y_reg = model_df[regression_target_col]
     y_cls = model_df["activity_target"].astype(int)
     groups = model_df["subject_id"].astype(int)
 
@@ -650,10 +715,14 @@ def run_grouped_evaluation(
     regression_summary_df = _summarize_regression_fold_metrics(regression_fold_df)
     classification_summary_df = _summarize_classification_fold_metrics(classification_fold_df)
 
+    regression_fold_df["regression_target_col"] = regression_target_col
+    regression_summary_df["regression_target_col"] = regression_target_col
+
     selected_regression_model, selected_classification_model, selected_models_df = _select_final_models(
         regression_summary_df=regression_summary_df,
         classification_summary_df=classification_summary_df,
     )
+    selected_models_df["regression_target_col"] = regression_target_col
 
     selected_regression_preds_df = regression_pred_df[regression_pred_df["model"] == selected_regression_model].copy()
     selected_classification_preds_df = classification_pred_df[
@@ -689,6 +758,12 @@ def run_grouped_evaluation(
             alpha=alpha,
         )
     )
+
+    conformal_fold_df["regression_target_col"] = regression_target_col
+    conformal_predictions_df["regression_target_col"] = regression_target_col
+    conformal_summary_df["regression_target_col"] = regression_target_col
+    conformal_by_subject_df["regression_target_col"] = regression_target_col
+    conformal_by_activity_df["regression_target_col"] = regression_target_col
 
     # Train selected models on full data for optional reuse outside this notebook workflow.
     reg_model_to_save = _fit_if_needed(

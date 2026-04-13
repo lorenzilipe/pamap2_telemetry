@@ -128,6 +128,17 @@ Implemented in Phase 1:
 - Aggregated to 1-second rows with mean HR per second.
 - Applied forward-fill within subject after 1-second aggregation.
 
+Implemented sensitivity study (2026-04-12):
+- Compared three subject-local HR fill strategies on the same grouped CV setup:
+	- `current_ffill` (unbounded forward fill)
+	- `limited_ffill_5s` (forward fill with 5-second cap)
+	- `strict_observed_only` (no gap fill)
+- Main result:
+	- `current_ffill` and `limited_ffill_5s` produced identical grouped MAE on the upgraded direct-30s setup (`6.5691`)
+	- `strict_observed_only` was slightly worse (`6.5742`) and used fewer rows
+- Adoption for preferred setup:
+	- keep `current_ffill` as the default due stable performance and simpler explanation.
+
 ### Time handling
 - sort within subject by timestamp before any temporal operation
 - resample to 1-second intervals for the main telemetry table
@@ -153,19 +164,19 @@ Phase 2 strict verification (2026-04-08):
 
 ## Implemented Phase 3 compact telemetry feature set
 
-The MVP uses a compact feature set rather than every raw axis directly.
+The MVP keeps the compact baseline and adds a small, targeted upgrade set.
 
 ### Core numeric signals
 - `heart_rate_bpm`
 - `hand_acc_16g_mag`, `chest_acc_16g_mag`, `ankle_acc_16g_mag`
 - `hand_gyro_mag`, `chest_gyro_mag`, `ankle_gyro_mag`
 
-Implementation note (2026-04-08):
-- Phase 3 stayed with the compact magnitude-only baseline.
-- Temperature features were not added in v1 to keep the feature set simple and interview-defensible.
+Compact baseline (still used):
+- 56 total baseline features (7 core signals + 49 lag/rolling/delta features)
+- no temperature features in v1 to keep scope lean
 
-### Implemented derived features
-For each selected numeric signal, Phase 3 created:
+### Baseline derived features
+For each core signal, the baseline set includes:
 - current value
 - lag 1 second
 - lag 5 seconds
@@ -184,30 +195,45 @@ Column naming pattern:
 - `<signal>_rollstd_10`
 - `<signal>_delta_from_rollmean_5`
 
+### Targeted upgraded features (2026-04-12)
+Added 19 features only, focused on high-value telemetry signals:
+- heart-rate shape features:
+	- `heart_rate_bpm_rollmin_10`
+	- `heart_rate_bpm_rollmax_10`
+	- `heart_rate_bpm_rollmedian_10`
+	- `heart_rate_bpm_rollq25_10`
+	- `heart_rate_bpm_rollq75_10`
+- heart-rate relative/baseline features:
+	- `heart_rate_bpm_recent_change_5`
+	- `heart_rate_bpm_rollmean_60`
+	- `heart_rate_bpm_vs_rollmean_60`
+- transition-sensitive motion features:
+	- `motion_intensity_mean`
+	- `motion_abs_change_1`
+	- `motion_abs_change_5`
+	- `motion_rollstd_5`
+	- `motion_rollstd_20`
+	- `motion_variance_burst_ratio`
+	- `acc_location_dispersion`
+- tiny raw-axis summary subset:
+	- `hand_acc_axis_absmean`
+	- `chest_acc_axis_absmean`
+	- `hand_acc_axis_absmean_rollmean_5`
+	- `chest_acc_axis_absmean_rollmean_5`
+
+Upgraded set size:
+- 75 total features
+- explicit gain over baseline in grouped direct-30s setup:
+	- MAE improved from `6.9374` to `6.5691` (`+0.3682` better)
+
 Leakage guard used:
 - All lag, rolling, and target shift operations are computed with subject-local groupby logic.
 - Data is sorted by `subject_id` and `timestamp_s` before any temporal transform.
 
-### Deferred ablation reminder (still pending)
-To confirm whether axis information is worth the extra complexity, run this deferred ablation in Phase 4/5.
-
-Feature setups:
-- Setup A: magnitude-only features (current MVP baseline)
-- Setup B: magnitude features plus a small axis subset
-
-Hold constant during ablation:
-- subject-grouped folds (LOSO preferred)
-- target definitions
-- model families and random seed
-
-Compare:
-- regression: MAE, RMSE
-- classification: macro F1, confusion matrix (check stair-direction confusion)
-- uncertainty: empirical coverage, average interval width
-
-Adoption rule:
-- keep Setup B only if it provides clear grouped held-out gains without making the notebook much harder to explain
-- otherwise keep Setup A for MVP defensibility
+Feature-ablation artifacts:
+- `artifacts/metrics/grouped_cv_feature_ablation_summary.csv`
+- `artifacts/metrics/grouped_cv_final_feature_summary.csv`
+- `artifacts/figures/grouped_cv_feature_ablation_mae.png`
 
 ---
 
@@ -233,21 +259,23 @@ File:
 - `data/processed/pamap2_model_table.parquet`
 
 Implemented additions (Phase 3):
-- lagged features
-- rolling features
-- `hr_target_30s`
+- baseline lag/rolling features
+- targeted upgraded features (19 additional columns)
+- `hr_target_30s`, `hr_target_15s`, `hr_target_next30s_mean`
 - `activity_target`
+- HR fill-policy metadata columns (`heart_rate_fill_strategy`, `heart_rate_observed_flag`)
 
-Final table status (2026-04-08):
-- rows: 18,627
-- columns: 63
-- row drop from windowing and future-target shift: 312 total rows
-- row retention by subject: saved to `artifacts/metrics/phase3_row_retention_by_subject.csv`
+Final table status after compact upgrade study (2026-04-12):
+- rows: 18,227
+- columns: 86
+- subjects: `101` to `108`
+- preferred fill strategy represented in final table: `current_ffill`
 
-Phase 3 validation artifacts:
-- `artifacts/metrics/phase3_row_retention_by_subject.csv`
-- `artifacts/metrics/phase3_feature_missingness_post_clean.csv`
-- `artifacts/metrics/phase3_target_summary.csv`
+Core update artifacts:
+- `artifacts/metrics/grouped_cv_feature_ablation_summary.csv`
+- `artifacts/metrics/grouped_cv_target_comparison_summary.csv`
+- `artifacts/metrics/grouped_cv_fill_sensitivity_summary.csv`
+- `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`
 
 ---
 
@@ -260,14 +288,24 @@ Default:
 Fallback only if necessary:
 - mean heart rate across the next 30 seconds within subject
 
+Implemented target variants for compact comparison:
+- `hr_target_30s = heart_rate_bpm shifted by -30 seconds within subject`
+- `hr_target_next30s_mean = mean(heart_rate_bpm at t+1 ... t+30) within subject`
+- `hr_target_15s = heart_rate_bpm shifted by -15 seconds within subject`
+
+Preferred grouped-evaluation target after ablation:
+- `hr_target_next30s_mean`
+
+Why:
+- it reduced grouped held-out MAE by `2.759` versus direct `t + 30s` under the same upgraded feature set.
+
 ### Classification target
 Default:
 - current activity label at time t
 
 Implemented in Phase 3:
-- `hr_target_30s = heart_rate_bpm shifted by -30 seconds within subject`
 - `activity_target = activity_id` (current activity)
-- Rows with missing required lag/rolling values or missing `hr_target_30s` are dropped after feature creation.
+- Rows with missing required features or the active regression target are dropped per setup.
 
 ### Uncertainty
 - split conformal prediction intervals around the regression model output
@@ -298,14 +336,14 @@ Core grouped artifacts:
 
 ### Grouped model comparison results
 
-Regression (mean MAE across LOSO folds):
-- `hist_gradient_boosting`: `6.9037` (selected)
-- `linear_regression`: `7.1572`
-- `persistence_current_hr`: `7.2202`
+Regression on preferred target `hr_target_next30s_mean` (mean MAE across LOSO folds):
+- `hist_gradient_boosting`: `3.8100` (selected)
+- `linear_regression`: `3.9471`
+- `persistence_current_hr`: `4.1304`
 
 Classification (mean macro F1 across LOSO folds):
-- `random_forest`: `0.7453` (selected)
-- `logistic_regression`: `0.7267`
+- `logistic_regression`: `0.7360` (selected)
+- `random_forest`: `0.7324`
 
 Selection rule used in code and artifacts:
 - regression: lowest mean MAE, tie-break by lower MAE std then lower mean RMSE
@@ -331,9 +369,15 @@ Grouped conformal outputs:
 
 Grouped conformal headline values:
 - target coverage: `0.90`
-- mean fold empirical coverage: `0.9292`
-- row-level empirical coverage: `0.9285`
-- mean fold interval width: `36.5708`
+- mean fold empirical coverage: `0.9169`
+- row-level empirical coverage: `0.9163`
+- mean fold interval width: `18.8001`
+
+Focused-ablation support artifacts:
+- `artifacts/metrics/grouped_cv_ablation_fold_metrics.csv`
+- `artifacts/metrics/grouped_cv_ablation_model_summaries.csv`
+- `artifacts/figures/grouped_cv_target_comparison_mae.png`
+- `artifacts/figures/grouped_cv_fill_sensitivity_mae.png`
 
 ---
 
@@ -361,7 +405,7 @@ Once the audit is done, update this file with answers to:
 2. How severe is heart-rate missingness?
 	- Severe at raw frequency (about 90.86% missing per row), expected from HR sampling near 9 Hz against 100 Hz IMU rows.
 3. Is direct `t + 30 seconds` forecasting stable enough?
-	- No blocker found in Phase 1. Proceed with direct shift in Phase 2/3 and validate on held-out subjects.
+	- It is stable and usable, but grouped ablation showed lower error for the next-30s average target. The project now documents both formulations explicitly.
 4. Which compact sensor features are most useful?
 	- Phase 1 interim keeps `heart_rate_bpm`, 16g accelerometer magnitudes, and gyroscope magnitudes for hand/chest/ankle.
 5. Does resampling to 1 second preserve enough signal for the MVP?

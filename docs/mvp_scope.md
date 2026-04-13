@@ -22,13 +22,18 @@ Generate lightweight prediction intervals for the regression task using split co
 ## Canonical target definitions
 
 ### Regression target
-Default target:
+Primary target objective:
 - `heart_rate` at `t + 30 seconds`
 
-Fallback target only if necessary:
+Required sensitivity targets:
 - average heart rate over the next 30 seconds
+- one shorter direct horizon (15 seconds in current implementation)
 
-Use the simple direct shift target first.
+Current preferred grouped-evaluation target (2026-04-12 update):
+- average heart rate over the next 30 seconds (`hr_target_next30s_mean`)
+
+Why:
+- it materially improved grouped held-out MAE versus direct `t + 30` while keeping the task short-horizon and interview-defensible.
 
 ### Classification target
 Default target:
@@ -66,6 +71,12 @@ Start with:
 - rolling means
 - rolling standard deviations
 - short-term change features
+
+Targeted upgrades allowed in v1 (small and explicit only):
+- rolling min/max/median and limited quantiles for heart rate
+- transition-sensitive motion summaries (recent change and variance burst)
+- recent-baseline-relative heart-rate features
+- at most a tiny raw-axis summary subset when justified
 
 ## Activity scope
 

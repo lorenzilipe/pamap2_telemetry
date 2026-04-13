@@ -312,3 +312,55 @@ The previous one-validation-subject selection logic was fragile and hard to defe
 - Current grouped-CV selections:
 	- regression: `hist_gradient_boosting`
 	- classification: `random_forest`
+
+---
+
+## 2026-04-12 Compact feature/target/fill ablation upgrade
+### Decision
+Add a compact ablation workflow that compares:
+1. baseline vs upgraded feature set,
+2. direct `t+30s` vs alternative regression targets,
+3. current HR fill policy vs stricter alternatives,
+then rebuild the final processed table and grouped evaluation outputs from the preferred setup.
+
+### Why
+The project needed clearer evidence for three interview-critical questions:
+- do smarter but still small features help,
+- does target formulation materially change performance,
+- are results fragile to HR fill assumptions.
+
+The previous pipeline answered these only partially.
+
+### Alternatives rejected
+- Large feature explosion across many extra windows and raw axes
+- Deep learning sequence models
+- Full factorial ablation across all combinations
+- Complex HR imputation beyond local forward-fill variants
+
+### Consequences
+- Added compact ablation script: `scripts/compact_ablation_study.py`
+- Updated grouped evaluation code to support explicit regression target selection and safer feature-column filtering.
+- Added targeted upgraded features (19 extra columns) and explicit target columns:
+	- `hr_target_30s`
+	- `hr_target_15s`
+	- `hr_target_next30s_mean`
+- Added fill-policy sensitivity outputs:
+	- `current_ffill`
+	- `limited_ffill_5s`
+	- `strict_observed_only`
+- New ablation artifacts:
+	- `artifacts/metrics/grouped_cv_feature_ablation_summary.csv`
+	- `artifacts/metrics/grouped_cv_target_comparison_summary.csv`
+	- `artifacts/metrics/grouped_cv_fill_sensitivity_summary.csv`
+	- `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`
+	- `artifacts/metrics/grouped_cv_final_feature_summary.csv`
+	- `artifacts/figures/grouped_cv_feature_ablation_mae.png`
+	- `artifacts/figures/grouped_cv_target_comparison_mae.png`
+	- `artifacts/figures/grouped_cv_fill_sensitivity_mae.png`
+- Preferred setup selected by compact ablation:
+	- feature set: `upgraded`
+	- fill strategy: `current_ffill`
+	- regression target: `hr_target_next30s_mean`
+- Grouped model selections under preferred setup:
+	- regression: `hist_gradient_boosting`
+	- classification: `logistic_regression`
