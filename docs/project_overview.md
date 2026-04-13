@@ -37,7 +37,7 @@ This MVP should show that I can:
 3. engineer time-aware features without leakage,
 4. build forecasting and classification models,
 5. add a simple uncertainty layer,
-6. evaluate results under a subject-held-out split,
+6. evaluate results under subject-grouped cross-validation,
 7. present conclusions clearly and honestly.
 
 ## High-level project story
@@ -68,11 +68,11 @@ This keeps the project coherent. Instead of looking like three unrelated noteboo
 - define current activity target
 
 ### Stage 4: modeling and evaluation
-- split by subject
-- run simple baselines
-- run one stronger sklearn regressor
-- run one stronger sklearn classifier
-- add split conformal intervals for regression
+- evaluate with leave-one-subject-out grouped folds
+- compare a compact model set per task
+- select final models from grouped fold summaries
+- report performance by subject and activity
+- add grouped split conformal intervals for regression
 
 ### Stage 5: reporting
 - save metrics
@@ -101,7 +101,7 @@ The MVP should be small, clean, and interview-defensible.
 This project is successful if it produces:
 
 - one clean telemetry modeling table
-- one subject-held-out evaluation workflow
+- one subject-grouped evaluation workflow
 - one honest regression result
 - one honest classification result
 - one uncertainty result with empirical coverage
@@ -115,7 +115,7 @@ The eventual resume framing should emphasize:
 - multivariate time-series feature engineering
 - short-horizon forecasting
 - activity-state classification
-- subject-held-out evaluation
+- subject-grouped evaluation
 - lightweight uncertainty estimation
 
 The resume framing should not overstate this as a production system, deployed platform, or finished product.

@@ -81,14 +81,14 @@ The goal is a clean, defensible MVP, not maximal label coverage.
 ## Evaluation design
 
 ### Split rule
-Use subject-held-out splits.
+Use subject-grouped evaluation with leave-one-subject-out cross-validation.
 
 Default logic:
-- training subjects
-- validation subject(s)
-- test subject(s)
+- each fold holds out one full subject for evaluation
+- no subject appears in both train and fold-test data
+- all model comparisons use the same grouped folds
 
-The exact subject IDs can be finalized after the audit, but test subjects should be unseen people.
+If runtime becomes too heavy, use grouped K-fold while preserving full subject isolation.
 
 ### Metrics
 
@@ -136,21 +136,14 @@ These are not required for the MVP:
 
 ### Regression model defaults
 Start with:
-- naive baseline
-- rolling baseline
-- linear regression baseline
-
-Then try one stronger sklearn model:
-- `HistGradientBoostingRegressor` preferred
-- `RandomForestRegressor` acceptable
+- persistence baseline using current heart rate
+- one linear model (`LinearRegression`)
+- one tree-based model (`HistGradientBoostingRegressor` preferred)
 
 ### Classification model defaults
 Start with:
-- majority class baseline
-- logistic regression baseline
-
-Then try one stronger sklearn model:
-- `RandomForestClassifier` preferred
+- one linear classifier baseline (`LogisticRegression`)
+- one tree-based model (`RandomForestClassifier`)
 
 ### Uncertainty default
 Use split conformal prediction on top of the final regression model.
@@ -168,4 +161,4 @@ If the answer is mostly no, do not add it.
 
 ## What the final project should honestly support saying
 
-"I built a notebook-based wearable telemetry pipeline on PAMAP2 that cleaned raw sensor streams, built time-windowed features, forecasted heart rate 30 seconds ahead, classified activity state, and generated calibrated prediction intervals using split conformal evaluation under a subject-held-out split."
+"I built a notebook-based wearable telemetry pipeline on PAMAP2 that cleaned raw sensor streams, built time-windowed features, forecasted heart rate 30 seconds ahead, classified activity state, and generated calibrated prediction intervals using split conformal evaluation under subject-grouped cross-validation."

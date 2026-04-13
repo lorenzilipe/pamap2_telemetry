@@ -196,7 +196,7 @@ Feature setups:
 - Setup B: magnitude features plus a small axis subset
 
 Hold constant during ablation:
-- subject-held-out split
+- subject-grouped folds (LOSO preferred)
 - target definitions
 - model families and random seed
 
@@ -206,7 +206,7 @@ Compare:
 - uncertainty: empirical coverage, average interval width
 
 Adoption rule:
-- keep Setup B only if it provides clear held-out gains without making the notebook much harder to explain
+- keep Setup B only if it provides clear grouped held-out gains without making the notebook much harder to explain
 - otherwise keep Setup A for MVP defensibility
 
 ---
@@ -274,59 +274,66 @@ Implemented in Phase 3:
 
 ---
 
-## Implemented split strategy (Phase 5)
+## Implemented grouped evaluation strategy (2026-04-12)
 
-Use subject-held-out splits.
+The modeling workflow now uses subject-grouped cross-validation instead of one fixed validation/test split.
 
-Implemented split:
+Implemented strategy:
+- leave-one-subject-out (LOSO) grouped cross-validation
+- one full held-out subject per fold
+- no subject overlap between train and fold-test data
+- same grouped folds for every model comparison
 
-- train subjects: 101, 102, 103, 104, 105, 106
-- validation subjects: 107
-- test subjects: 108
-- excluded from default split due low coverage: 109
+Current fold setup:
+- subjects covered: `101` to `108`
+- total folds: `8`
+- train subjects per fold: `7`
 
-Reason for split choice:
-- Preserves subject-held-out design while avoiding unstable evaluation from the very low-coverage subject 109.
-- Keeps one validation subject and one test subject from unseen people.
+Core grouped artifacts:
+- `artifacts/metrics/grouped_cv_regression_fold_metrics.csv`
+- `artifacts/metrics/grouped_cv_regression_summary.csv`
+- `artifacts/metrics/grouped_cv_classification_fold_metrics.csv`
+- `artifacts/metrics/grouped_cv_classification_summary.csv`
+- `artifacts/metrics/grouped_cv_selected_model_summary.csv`
 
-Implemented row counts (from `artifacts/metrics/phase5_split_summary.csv`):
-- train rows: 13,841
-- validation rows: 2,291
-- test rows: 2,495
+### Grouped model comparison results
 
----
+Regression (mean MAE across LOSO folds):
+- `hist_gradient_boosting`: `6.9037` (selected)
+- `linear_regression`: `7.1572`
+- `persistence_current_hr`: `7.2202`
 
-## Implemented Phase 4 to Phase 8 outcomes (2026-04-08)
+Classification (mean macro F1 across LOSO folds):
+- `random_forest`: `0.7453` (selected)
+- `logistic_regression`: `0.7267`
 
-### Phase 4: EDA and target sanity checks
-- Regression target remains strongly related to recent heart rate:
-	- `corr(heart_rate_bpm, hr_target_30s) = 0.8966`
-	- `corr(heart_rate_bpm_rollmean_10, hr_target_30s) = 0.8861`
-- Core motion features show strong activity separability under ANOVA checks.
-- Saved checks file: `artifacts/metrics/phase4_target_difficulty_checks.csv`
+Selection rule used in code and artifacts:
+- regression: lowest mean MAE, tie-break by lower MAE std then lower mean RMSE
+- classification: highest mean macro F1, tie-break by lower macro F1 std then higher mean accuracy
 
-### Phase 6: Baselines
-- Best regression baseline on validation: `linear_regression_baseline`
-	- validation MAE: `8.2262`
-- Best classification baseline on test: `logistic_regression_baseline`
-	- test accuracy: `0.8509`
-	- test macro F1: `0.8404`
-- Saved baseline metrics: `artifacts/metrics/phase6_baseline_metrics.csv`
+### Breakdown and uncertainty outputs
 
-### Phase 7: Stronger models and selection
-- Tuned stronger regression model: `HistGradientBoostingRegressor`
-- Tuned stronger classification model: `RandomForestClassifier`
-- Final selected models by validation performance:
-	- regression: `linear_regression_baseline`
-	- classification: `random_forest_tuned`
-- Saved model selection file: `artifacts/metrics/phase7_final_model_selection.csv`
+Where performance breaks is now reported with:
+- by-subject tables:
+	- `artifacts/metrics/grouped_cv_regression_selected_by_subject.csv`
+	- `artifacts/metrics/grouped_cv_classification_selected_by_subject.csv`
+- by-activity tables:
+	- `artifacts/metrics/grouped_cv_regression_selected_by_activity.csv`
+	- `artifacts/metrics/grouped_cv_classification_selected_by_activity.csv`
+- classification per-class table:
+	- `artifacts/metrics/grouped_cv_classification_selected_per_class.csv`
 
-### Phase 8: Split conformal intervals
-- Final regression model used for conformal calibration: `linear_regression_baseline`
-- Target coverage: `0.90`
-- Test empirical coverage: `0.9142`
-- Average interval width: `37.6225`
-- Saved summary file: `artifacts/metrics/phase8_conformal_summary.csv`
+Grouped conformal outputs:
+- `artifacts/metrics/grouped_cv_conformal_fold_summary.csv`
+- `artifacts/metrics/grouped_cv_conformal_summary.csv`
+- `artifacts/metrics/grouped_cv_conformal_by_subject.csv`
+- `artifacts/metrics/grouped_cv_conformal_by_activity.csv`
+
+Grouped conformal headline values:
+- target coverage: `0.90`
+- mean fold empirical coverage: `0.9292`
+- row-level empirical coverage: `0.9285`
+- mean fold interval width: `36.5708`
 
 ---
 

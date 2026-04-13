@@ -69,10 +69,23 @@ What these scripts do:
   - define regression and classification targets
 
 - `03_modeling_and_uncertainty.ipynb`
-  - build subject-held-out splits
-  - run baselines and stronger sklearn models
-  - add split conformal prediction intervals
-  - generate final plots and metrics
+  - run leave-one-subject-out grouped model comparison
+  - compare a compact model set per task
+  - select final models from grouped CV summaries
+  - add grouped conformal prediction intervals
+  - generate fold, subject, and activity breakdown artifacts
+
+## Evaluation story
+
+The final modeling workflow is subject-aware end to end:
+
+- model selection uses leave-one-subject-out cross-validation
+- fold metrics are saved for every candidate model
+- aggregate metrics include mean, standard deviation, min, and max across folds
+- final model decisions are based on grouped CV summaries, not one validation subject
+- error analysis is reported by subject, by activity, and by class (for classification)
+
+Grouped evaluation artifacts use `grouped_cv_` prefixes under `artifacts/metrics/` and `artifacts/figures/`.
 
 ## Principles
 

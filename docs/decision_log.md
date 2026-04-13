@@ -274,3 +274,41 @@ This closes the core MVP modeling scope while staying lean, transparent, and int
 - Saved final trainable models in `artifacts/models/`:
 	- `phase7_final_regression_model.joblib`
 	- `phase7_final_classification_model.joblib`
+
+---
+
+## 2026-04-12 Grouped evaluation rebuild
+### Decision
+Replace the narrow single validation/test subject selection workflow in notebook 03 with leave-one-subject-out grouped cross-validation for both regression and classification model selection, then keep split conformal uncertainty under grouped subject isolation.
+
+### Why
+The previous one-validation-subject selection logic was fragile and hard to defend in interviews. Grouped LOSO gives a clearer answer for cross-subject generalization and makes model ranking less sensitive to one person.
+
+### Alternatives rejected
+- Keep one fixed train/validation/test subject split for model selection
+- Expand to a large benchmark model zoo
+- Add complex nested tuning loops in v1
+
+### Consequences
+- Added grouped evaluation helper module: `scripts/grouped_evaluation.py`
+- Refactored modeling notebook: `notebooks/03_modeling_and_uncertainty.ipynb`
+- New grouped metrics artifacts:
+	- `artifacts/metrics/grouped_cv_regression_fold_metrics.csv`
+	- `artifacts/metrics/grouped_cv_regression_summary.csv`
+	- `artifacts/metrics/grouped_cv_classification_fold_metrics.csv`
+	- `artifacts/metrics/grouped_cv_classification_summary.csv`
+	- `artifacts/metrics/grouped_cv_selected_model_summary.csv`
+- New breakdown artifacts:
+	- `artifacts/metrics/grouped_cv_regression_selected_by_subject.csv`
+	- `artifacts/metrics/grouped_cv_regression_selected_by_activity.csv`
+	- `artifacts/metrics/grouped_cv_classification_selected_by_subject.csv`
+	- `artifacts/metrics/grouped_cv_classification_selected_by_activity.csv`
+	- `artifacts/metrics/grouped_cv_classification_selected_per_class.csv`
+- New grouped conformal artifacts:
+	- `artifacts/metrics/grouped_cv_conformal_fold_summary.csv`
+	- `artifacts/metrics/grouped_cv_conformal_summary.csv`
+	- `artifacts/metrics/grouped_cv_conformal_by_subject.csv`
+	- `artifacts/metrics/grouped_cv_conformal_by_activity.csv`
+- Current grouped-CV selections:
+	- regression: `hist_gradient_boosting`
+	- classification: `random_forest`

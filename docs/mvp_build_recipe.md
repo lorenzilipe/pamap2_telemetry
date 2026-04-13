@@ -234,15 +234,15 @@ This is only a default guess. Final choice should be based on the audit.
 Random row-level splitting creates leakage because neighboring time points are too similar.
 
 ### 5.1.2. Split by subject first
-Use a subject-based split.
+Use a subject-grouped cross-validation strategy.
 
-Example:
-- train subjects: 1 to 6
-- validation subject: 7
-- test subjects: 8 to 9
+Default:
+- leave-one-subject-out cross-validation
+- one held-out subject per fold
+- no subject overlap between fold train and fold test rows
 
-The exact IDs can change. The rule is:
-- new people in the test set
+Fallback if runtime is too heavy:
+- grouped K-fold with strict subject isolation
 
 ---
 
@@ -422,7 +422,7 @@ Design to run in Phase 3/4:
 - Setup B (candidate): magnitude features plus a small axis subset from the same sensors
 
 Rules for a fair comparison:
-- use the same subject-held-out split
+- use the same subject-grouped folds
 - use the same preprocessing and target definitions
 - use the same models and random seed
 - compare only feature-set differences
@@ -737,4 +737,4 @@ Present it as:
 
 This MVP is successful if, by the end, it honestly supports saying:
 
-"I built a notebook-based wearable telemetry pipeline on PAMAP2 that cleaned raw sensor streams, built time-windowed features, forecasted heart rate 30 seconds ahead, classified activity state, and generated calibrated prediction intervals using split conformal evaluation under a subject-held-out split."
+"I built a notebook-based wearable telemetry pipeline on PAMAP2 that cleaned raw sensor streams, built time-windowed features, forecasted heart rate 30 seconds ahead, classified activity state, and generated calibrated prediction intervals using split conformal evaluation under subject-grouped cross-validation."
