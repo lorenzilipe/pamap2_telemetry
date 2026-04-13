@@ -398,3 +398,25 @@ One overall coverage number was not enough to explain where the telemetry system
 	- `grouped_cv_classification_abstention_summary.csv`
 - New figures were added for residual distribution, reliability, and abstention tradeoffs.
 - The README and notebook now include explicit limitations and operating-envelope framing.
+
+---
+
+## 2026-04-13 Lean src package and contract refactor
+### Decision
+Refactor reusable non-EDA logic into a small `src/pamap2_telemetry/` package and keep notebooks as thin orchestrators/reporting layers. Add explicit stage contracts and lightweight selected-model experiment records.
+
+### Why
+The notebook-first workflow remains valuable for narrative and interpretation, but reusable logic needed clearer boundaries for reproducibility, inference consistency, and easier reruns.
+
+### Alternatives rejected
+- Keep core reusable logic only in notebooks.
+- Keep logic only in large scripts without a package boundary.
+- Introduce heavier MLOps or service infrastructure in v1.
+
+### Consequences
+- Added package modules: `ingest`, `features`, `splits`, `train`, `evaluate`, `uncertainty`, plus compact ablation and experiment-record helpers.
+- Updated scripts to thin wrappers that call the package.
+- Updated notebooks 02 and 03 to import from `src/` modules.
+- Added explicit data contracts in `docs/data_contracts.md` and `docs/schemas/*.json`.
+- Added selected-model experiment records in `artifacts/models/metadata/`.
+- Ensured train/inference preprocessing consistency by using sklearn Pipelines with explicit imputation and scaling where needed.

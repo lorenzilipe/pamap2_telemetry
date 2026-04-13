@@ -1,0 +1,29 @@
+{
+  "record_version": "v1",
+  "record_date": "2026-04-13",
+  "task": "classification",
+  "model_name": "logistic_regression",
+  "feature_set": "upgraded",
+  "target_definition": "activity_target",
+  "fill_strategy": "current_ffill",
+  "split_strategy": "leave-one-subject-out grouped CV",
+  "selection_rule": "highest mean macro F1 across LOSO folds, tie-break by lower macro F1 std then higher mean accuracy",
+  "hyperparameters": "See model object saved in artifacts/models and grouped_cv_* summaries.",
+  "metrics_summary": {
+    "selected_mean_macro_f1": 0.7426461113160093,
+    "selected_std_macro_f1": 0.080570593659175,
+    "runner_up_mean_macro_f1": 0.7338701742690908,
+    "winner_margin": 0.0087759370469184
+  },
+  "uncertainty_notes": {
+    "method": "split conformal",
+    "preferred_interval_variant": "global",
+    "row_level_empirical_coverage": 0.917649640643002,
+    "row_level_average_interval_width": 18.91749491206437
+  },
+  "notes": [
+    "Designed to stay lean and interview-defensible.",
+    "All temporal operations are subject-local and sorted by timestamp.",
+    "Preprocessing and model are packaged in sklearn Pipeline objects for reproducible inference."
+  ]
+}

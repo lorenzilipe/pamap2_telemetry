@@ -1,0 +1,28 @@
+{
+  "stage": "interim_1s_telemetry",
+  "path": "data/interim/pamap2_per_second.parquet",
+  "required_columns": [
+    {"name": "subject_id", "dtype": "int"},
+    {"name": "session", "dtype": "string"},
+    {"name": "timestamp_s", "dtype": "int"},
+    {"name": "activity_id", "dtype": "int"},
+    {"name": "activity_label", "dtype": "string"},
+    {"name": "heart_rate_bpm", "dtype": "float", "unit": "bpm"},
+    {"name": "heart_rate_observed_flag", "dtype": "int"},
+    {"name": "hand_acc_16g_mag", "dtype": "float"},
+    {"name": "chest_acc_16g_mag", "dtype": "float"},
+    {"name": "ankle_acc_16g_mag", "dtype": "float"},
+    {"name": "hand_gyro_mag", "dtype": "float"},
+    {"name": "chest_gyro_mag", "dtype": "float"},
+    {"name": "ankle_gyro_mag", "dtype": "float"}
+  ],
+  "optional_columns": [
+    "hand_acc_axis_absmean",
+    "chest_acc_axis_absmean"
+  ],
+  "validity_rules": [
+    "One row per subject_id and timestamp_s",
+    "Keep only configured activity set",
+    "Apply fill strategy within each subject"
+  ]
+}

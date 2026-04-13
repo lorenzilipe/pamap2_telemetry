@@ -1,0 +1,29 @@
+{
+  "record_version": "v1",
+  "record_date": "2026-04-13",
+  "task": "regression",
+  "model_name": "hist_gradient_boosting",
+  "feature_set": "upgraded",
+  "target_definition": "hr_target_next30s_mean",
+  "fill_strategy": "current_ffill",
+  "split_strategy": "leave-one-subject-out grouped CV",
+  "selection_rule": "lowest mean MAE across LOSO folds, tie-break by lower MAE std then lower mean RMSE",
+  "hyperparameters": "See model object saved in artifacts/models and grouped_cv_* summaries.",
+  "metrics_summary": {
+    "selected_mean_mae": 3.812660852771272,
+    "selected_std_mae": 0.6895303002472756,
+    "runner_up_mean_mae": 3.948291076126488,
+    "winner_margin": 0.1356302233552151
+  },
+  "uncertainty_notes": {
+    "method": "split conformal",
+    "preferred_interval_variant": "global",
+    "row_level_empirical_coverage": 0.917649640643002,
+    "row_level_average_interval_width": 18.91749491206437
+  },
+  "notes": [
+    "Designed to stay lean and interview-defensible.",
+    "All temporal operations are subject-local and sorted by timestamp.",
+    "Preprocessing and model are packaged in sklearn Pipeline objects for reproducible inference."
+  ]
+}

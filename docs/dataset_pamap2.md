@@ -11,6 +11,10 @@ It should answer:
 - how the 1-second telemetry table is built,
 - how final modeling features and targets are defined.
 
+Explicit contract references:
+- canonical stage contracts: `docs/data_contracts.md`
+- machine-readable schemas: `docs/schemas/*.json`
+
 This document starts partially templated and should be updated after Phase 1.
 
 ---
@@ -243,6 +247,9 @@ Feature-ablation artifacts:
 File:
 - `data/interim/pamap2_per_second.parquet`
 
+Schema contract:
+- `docs/schemas/interim_telemetry_schema.json`
+
 One row per:
 - subject
 - second
@@ -257,6 +264,9 @@ Expected columns:
 ### Final modeling table
 File:
 - `data/processed/pamap2_model_table.parquet`
+
+Schema contract:
+- `docs/schemas/model_table_schema.json`
 
 Implemented additions (Phase 3):
 - baseline lag/rolling features

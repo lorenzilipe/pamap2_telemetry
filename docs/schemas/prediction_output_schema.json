@@ -1,0 +1,46 @@
+{
+  "stage": "model_outputs",
+  "required_outputs": [
+    "grouped_cv_regression_fold_metrics.csv",
+    "grouped_cv_classification_fold_metrics.csv",
+    "grouped_cv_selected_model_summary.csv",
+    "grouped_cv_conformal_summary.csv"
+  ],
+  "prediction_tables": {
+    "regression": {
+      "file": "grouped_cv_regression_predictions_all_models.csv",
+      "required_columns": ["subject_id", "timestamp_s", "model", "fold", "y_true", "y_pred"]
+    },
+    "classification": {
+      "file": "grouped_cv_classification_predictions_all_models.csv",
+      "required_columns": [
+        "subject_id",
+        "timestamp_s",
+        "model",
+        "fold",
+        "y_true",
+        "y_pred",
+        "confidence",
+        "true_class_probability"
+      ]
+    },
+    "uncertainty": {
+      "file": "grouped_cv_conformal_predictions.csv",
+      "required_columns": [
+        "subject_id",
+        "timestamp_s",
+        "fold",
+        "y_true",
+        "y_pred",
+        "lower",
+        "upper",
+        "covered",
+        "interval_width"
+      ]
+    }
+  },
+  "experiment_record_files": [
+    "docs/model_records/regression_selected_model_record.json",
+    "docs/model_records/classification_selected_model_record.json"
+  ]
+}

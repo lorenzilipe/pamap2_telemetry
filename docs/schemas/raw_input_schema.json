@@ -1,0 +1,36 @@
+{
+  "stage": "raw_input",
+  "source": "PAMAP2 Protocol subject files",
+  "required_columns": [
+    {"name": "timestamp_s", "dtype": "float", "unit": "seconds"},
+    {"name": "activity_id", "dtype": "int", "unit": "id"},
+    {"name": "heart_rate_bpm", "dtype": "float", "unit": "bpm"},
+    {"name": "hand_acc_16g_x", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "hand_acc_16g_y", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "hand_acc_16g_z", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "hand_gyro_x", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "hand_gyro_y", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "hand_gyro_z", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "chest_acc_16g_x", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "chest_acc_16g_y", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "chest_acc_16g_z", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "chest_gyro_x", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "chest_gyro_y", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "chest_gyro_z", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "ankle_acc_16g_x", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "ankle_acc_16g_y", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "ankle_acc_16g_z", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "ankle_gyro_x", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "ankle_gyro_y", "dtype": "float", "unit": "sensor_unit"},
+    {"name": "ankle_gyro_z", "dtype": "float", "unit": "sensor_unit"}
+  ],
+  "validity_rules": [
+    "Sort by subject_id and timestamp_s before temporal transforms",
+    "Drop activity_id=0 rows for supervised targets",
+    "Do not mix Protocol and Optional sessions in grouped evaluation"
+  ],
+  "missingness_policy": [
+    "Raw heart_rate_bpm missingness is expected",
+    "Do not impute across subjects"
+  ]
+}

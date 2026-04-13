@@ -1,0 +1,32 @@
+{
+  "stage": "final_model_table",
+  "path": "data/processed/pamap2_model_table.parquet",
+  "required_identifier_columns": [
+    "subject_id",
+    "timestamp_s",
+    "activity_id",
+    "activity_label",
+    "heart_rate_fill_strategy"
+  ],
+  "required_target_columns": [
+    "activity_target",
+    "hr_target_30s",
+    "hr_target_15s",
+    "hr_target_next30s_mean"
+  ],
+  "required_feature_groups": [
+    "core telemetry signals",
+    "subject-local lag features",
+    "subject-local rolling features",
+    "compact upgraded telemetry features"
+  ],
+  "validity_rules": [
+    "Sort by subject_id and timestamp_s before lag/rolling/shift",
+    "Use only past information for feature creation",
+    "Generate targets with subject-local future shift/window"
+  ],
+  "missingness_policy": [
+    "Drop rows missing required selected target/features",
+    "Use in-pipeline median imputer at model train/inference time"
+  ]
+}
