@@ -186,3 +186,91 @@ The project already had working Phase 2 logic in notebook 01, but audit complete
 	- `artifacts/metrics/phase2_strict_validation_checks.csv`
 	- `artifacts/metrics/phase2_interim_hr_missingness_by_subject.csv`
 - Phase 2 is now explicitly verified as complete with schema, uniqueness, sort-order, activity-set, and post-fill heart-rate checks.
+
+---
+
+## 2026-04-08 Phase 3 feature pipeline completion
+### Decision
+Complete Phase 3 as a strict feature-engineering step using the compact magnitude-based signal set only, and generate the final supervised table at `data/processed/pamap2_model_table.parquet` plus Phase 3 validation artifacts.
+
+### Why
+This matches the MVP build recipe and keeps scope focused: create past-only lagged and rolling features, define `hr_target_30s` and `activity_target`, and avoid drifting early into modeling or expanded feature families. The compact set is easier to explain and already aligned with the project's interview-defensible story.
+
+### Alternatives rejected
+- Adding temperature features in Phase 3 by default
+- Expanding to axis-level feature sets before baseline Phase 4/5 evaluation
+- Starting Phase 4 EDA in the same implementation pass
+- Switching the regression target to a next-30s average before testing the direct shift target
+
+### Consequences
+- Phase 3 notebook implementation added in `notebooks/02_feature_pipeline.ipynb`.
+- Final modeling table generated with 18,627 rows and 63 columns.
+- Per-subject row loss from windowing plus future shift is 39 rows each (8 subjects, 312 total).
+- Phase 3 artifacts added:
+	- `artifacts/metrics/phase3_row_retention_by_subject.csv`
+	- `artifacts/metrics/phase3_feature_missingness_post_clean.csv`
+	- `artifacts/metrics/phase3_target_summary.csv`
+- `docs/dataset_pamap2.md` now records implemented (not just planned) Phase 3 feature and target definitions.
+
+---
+
+## 2026-04-08 Cross-platform environment workflow
+### Decision
+Use machine-local Python environments and a shared kernel name (`Python (pamap2-telemetry)`) across Windows and macOS, with setup scripts per operating system.
+
+### Why
+Virtual environments are not portable across operating systems. Syncing a macOS `.venv` into Windows caused kernel startup failures. A local-per-machine environment keeps notebook execution stable while preserving one shared codebase.
+
+### Alternatives rejected
+- Sharing one `.venv` folder across macOS and Windows through cloud sync
+- Keeping OS-specific interpreter paths in repository settings
+
+### Consequences
+- Added setup scripts:
+	- `scripts/setup_windows.ps1`
+	- `scripts/setup_mac.sh`
+- Added transition instructions in `README.md`.
+- Added `.venv_mac/` and `.venv_win/` to `.gitignore`.
+
+---
+
+## 2026-04-08 Phase 4 to Phase 8 implementation complete
+### Decision
+Complete Phases 4-8 in notebook 03 with subject-held-out evaluation, baseline and stronger models, and split conformal intervals.
+
+### Why
+This closes the core MVP modeling scope while staying lean, transparent, and interview-defensible. The workflow now includes EDA evidence, fixed splits, baseline comparisons, stronger model checks, and calibrated uncertainty.
+
+### Alternatives rejected
+- Skipping baseline models and moving directly to stronger models
+- Changing the split strategy midstream
+- Using complex uncertainty methods beyond split conformal for v1
+
+### Consequences
+- Notebook implementation completed in `notebooks/03_modeling_and_uncertainty.ipynb`.
+- New metrics artifacts added:
+	- `artifacts/metrics/phase4_target_difficulty_checks.csv`
+	- `artifacts/metrics/phase5_split_summary.csv`
+	- `artifacts/metrics/phase6_baseline_metrics.csv`
+	- `artifacts/metrics/phase7_regression_tuning_results.csv`
+	- `artifacts/metrics/phase7_classification_tuning_results.csv`
+	- `artifacts/metrics/phase7_stronger_model_metrics.csv`
+	- `artifacts/metrics/phase6_7_all_model_metrics.csv`
+	- `artifacts/metrics/phase7_final_model_selection.csv`
+	- `artifacts/metrics/phase8_conformal_summary.csv`
+	- `artifacts/metrics/phase8_conformal_by_activity.csv`
+	- `artifacts/metrics/phase8_conformal_test_predictions.csv`
+- New figure artifacts added:
+	- `artifacts/figures/phase4_regression_heart_rate_distribution.png`
+	- `artifacts/figures/phase4_regression_hr_by_activity_boxplot.png`
+	- `artifacts/figures/phase4_regression_subject_timeseries.png`
+	- `artifacts/figures/phase4_regression_top_feature_corr_heatmap.png`
+	- `artifacts/figures/phase4_class_balance.png`
+	- `artifacts/figures/phase4_sensor_trace_by_activity.png`
+	- `artifacts/figures/phase4_motion_distribution_by_activity.png`
+	- `artifacts/figures/phase7_confusion_matrix_test.png`
+	- `artifacts/figures/phase8_interval_example_test.png`
+	- `artifacts/figures/phase8_coverage_by_activity.png`
+- Saved final trainable models in `artifacts/models/`:
+	- `phase7_final_regression_model.joblib`
+	- `phase7_final_classification_model.joblib`

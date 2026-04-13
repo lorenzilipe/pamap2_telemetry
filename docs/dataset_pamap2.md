@@ -151,18 +151,21 @@ Phase 2 strict verification (2026-04-08):
 
 ---
 
-## Planned compact telemetry feature set
+## Implemented Phase 3 compact telemetry feature set
 
-The MVP should use a compact feature set rather than every raw axis directly.
+The MVP uses a compact feature set rather than every raw axis directly.
 
 ### Core numeric signals
-- heart rate
-- accelerometer magnitude by body location
-- gyroscope magnitude by body location
-- optional temperature by body location
+- `heart_rate_bpm`
+- `hand_acc_16g_mag`, `chest_acc_16g_mag`, `ankle_acc_16g_mag`
+- `hand_gyro_mag`, `chest_gyro_mag`, `ankle_gyro_mag`
 
-### Planned derived features
-For each selected numeric signal:
+Implementation note (2026-04-08):
+- Phase 3 stayed with the compact magnitude-only baseline.
+- Temperature features were not added in v1 to keep the feature set simple and interview-defensible.
+
+### Implemented derived features
+For each selected numeric signal, Phase 3 created:
 - current value
 - lag 1 second
 - lag 5 seconds
@@ -172,8 +175,21 @@ For each selected numeric signal:
 - rolling std over last 10 seconds
 - short-term change from rolling mean
 
-### Planned ablation reminder (run later)
-To confirm whether axis information is worth the extra complexity, run this deferred ablation in Phase 3/4.
+Column naming pattern:
+- `<signal>_lag_1`
+- `<signal>_lag_5`
+- `<signal>_rollmean_5`
+- `<signal>_rollstd_5`
+- `<signal>_rollmean_10`
+- `<signal>_rollstd_10`
+- `<signal>_delta_from_rollmean_5`
+
+Leakage guard used:
+- All lag, rolling, and target shift operations are computed with subject-local groupby logic.
+- Data is sorted by `subject_id` and `timestamp_s` before any temporal transform.
+
+### Deferred ablation reminder (still pending)
+To confirm whether axis information is worth the extra complexity, run this deferred ablation in Phase 4/5.
 
 Feature setups:
 - Setup A: magnitude-only features (current MVP baseline)
@@ -195,7 +211,7 @@ Adoption rule:
 
 ---
 
-## Planned telemetry table
+## Telemetry tables
 
 ### Interim table
 File:
@@ -216,15 +232,26 @@ Expected columns:
 File:
 - `data/processed/pamap2_model_table.parquet`
 
-Expected additions:
+Implemented additions (Phase 3):
 - lagged features
 - rolling features
 - `hr_target_30s`
 - `activity_target`
 
+Final table status (2026-04-08):
+- rows: 18,627
+- columns: 63
+- row drop from windowing and future-target shift: 312 total rows
+- row retention by subject: saved to `artifacts/metrics/phase3_row_retention_by_subject.csv`
+
+Phase 3 validation artifacts:
+- `artifacts/metrics/phase3_row_retention_by_subject.csv`
+- `artifacts/metrics/phase3_feature_missingness_post_clean.csv`
+- `artifacts/metrics/phase3_target_summary.csv`
+
 ---
 
-## Planned target definitions
+## Implemented target definitions
 
 ### Regression target
 Default:
@@ -237,16 +264,21 @@ Fallback only if necessary:
 Default:
 - current activity label at time t
 
+Implemented in Phase 3:
+- `hr_target_30s = heart_rate_bpm shifted by -30 seconds within subject`
+- `activity_target = activity_id` (current activity)
+- Rows with missing required lag/rolling values or missing `hr_target_30s` are dropped after feature creation.
+
 ### Uncertainty
 - split conformal prediction intervals around the regression model output
 
 ---
 
-## Planned split strategy
+## Implemented split strategy (Phase 5)
 
 Use subject-held-out splits.
 
-Record final chosen split here after implementation:
+Implemented split:
 
 - train subjects: 101, 102, 103, 104, 105, 106
 - validation subjects: 107
@@ -256,6 +288,45 @@ Record final chosen split here after implementation:
 Reason for split choice:
 - Preserves subject-held-out design while avoiding unstable evaluation from the very low-coverage subject 109.
 - Keeps one validation subject and one test subject from unseen people.
+
+Implemented row counts (from `artifacts/metrics/phase5_split_summary.csv`):
+- train rows: 13,841
+- validation rows: 2,291
+- test rows: 2,495
+
+---
+
+## Implemented Phase 4 to Phase 8 outcomes (2026-04-08)
+
+### Phase 4: EDA and target sanity checks
+- Regression target remains strongly related to recent heart rate:
+	- `corr(heart_rate_bpm, hr_target_30s) = 0.8966`
+	- `corr(heart_rate_bpm_rollmean_10, hr_target_30s) = 0.8861`
+- Core motion features show strong activity separability under ANOVA checks.
+- Saved checks file: `artifacts/metrics/phase4_target_difficulty_checks.csv`
+
+### Phase 6: Baselines
+- Best regression baseline on validation: `linear_regression_baseline`
+	- validation MAE: `8.2262`
+- Best classification baseline on test: `logistic_regression_baseline`
+	- test accuracy: `0.8509`
+	- test macro F1: `0.8404`
+- Saved baseline metrics: `artifacts/metrics/phase6_baseline_metrics.csv`
+
+### Phase 7: Stronger models and selection
+- Tuned stronger regression model: `HistGradientBoostingRegressor`
+- Tuned stronger classification model: `RandomForestClassifier`
+- Final selected models by validation performance:
+	- regression: `linear_regression_baseline`
+	- classification: `random_forest_tuned`
+- Saved model selection file: `artifacts/metrics/phase7_final_model_selection.csv`
+
+### Phase 8: Split conformal intervals
+- Final regression model used for conformal calibration: `linear_regression_baseline`
+- Target coverage: `0.90`
+- Test empirical coverage: `0.9142`
+- Average interval width: `37.6225`
+- Saved summary file: `artifacts/metrics/phase8_conformal_summary.csv`
 
 ---
 

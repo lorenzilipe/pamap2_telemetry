@@ -30,6 +30,31 @@ Read these in order:
 - `artifacts/metrics/` — saved metrics tables
 - `artifacts/models/` — optional saved models
 
+## Cross-platform environment setup
+
+This project is edited on both Windows and macOS. To avoid kernel failures, keep Python environments machine-local and never sync one OS environment to the other.
+
+Use the setup scripts from repository root:
+
+- Windows (PowerShell):
+  - `./scripts/setup_windows.ps1`
+- macOS (bash):
+  - `bash ./scripts/setup_mac.sh`
+
+What these scripts do:
+1. detect and rename incompatible synced `.venv` folders when needed,
+2. create a local machine environment outside the synced repo,
+3. install dependencies from `requirements.txt`,
+4. register a shared notebook kernel name: `Python (pamap2-telemetry)`.
+
+### Transition checklist between computers
+
+1. Save and commit notebook/code changes.
+2. Push to Git and wait for cloud sync to finish.
+3. On the next machine, pull latest changes.
+4. Run the local setup script for that OS if needed.
+5. In VS Code notebooks, select kernel `Python (pamap2-telemetry)`.
+
 ## Initial notebook plan
 
 - `01_ingest_and_audit.ipynb`
