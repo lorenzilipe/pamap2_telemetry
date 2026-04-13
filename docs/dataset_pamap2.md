@@ -337,13 +337,13 @@ Core grouped artifacts:
 ### Grouped model comparison results
 
 Regression on preferred target `hr_target_next30s_mean` (mean MAE across LOSO folds):
-- `hist_gradient_boosting`: `3.8100` (selected)
-- `linear_regression`: `3.9471`
+- `hist_gradient_boosting`: `3.8127` (selected)
+- `linear_regression`: `3.9483`
 - `persistence_current_hr`: `4.1304`
 
 Classification (mean macro F1 across LOSO folds):
-- `logistic_regression`: `0.7360` (selected)
-- `random_forest`: `0.7324`
+- `logistic_regression`: `0.7426` (selected)
+- `random_forest`: `0.7339`
 
 Selection rule used in code and artifacts:
 - regression: lowest mean MAE, tie-break by lower MAE std then lower mean RMSE
@@ -367,11 +367,36 @@ Grouped conformal outputs:
 - `artifacts/metrics/grouped_cv_conformal_by_subject.csv`
 - `artifacts/metrics/grouped_cv_conformal_by_activity.csv`
 
+Expanded conformal diagnostics now also include:
+- all-variant comparison files:
+	- `artifacts/metrics/grouped_cv_conformal_summary_all_variants.csv`
+	- `artifacts/metrics/grouped_cv_conformal_variant_comparison.csv`
+	- `artifacts/metrics/grouped_cv_conformal_fold_summary_all_variants.csv`
+	- `artifacts/metrics/grouped_cv_conformal_by_activity_all_variants.csv`
+	- `artifacts/metrics/grouped_cv_conformal_by_subject_all_variants.csv`
+- residual and failure diagnostics:
+	- `artifacts/metrics/grouped_cv_regression_residual_summary.csv`
+	- `artifacts/metrics/grouped_cv_uncertainty_failure_by_activity.csv`
+	- `artifacts/metrics/grouped_cv_uncertainty_failure_by_subject.csv`
+	- `artifacts/metrics/grouped_cv_uncertainty_operating_envelope_by_activity.csv`
+
+Conformal method policy (2026-04-13 update):
+- keep global split conformal as baseline,
+- evaluate activity-conditioned split conformal each run,
+- select conditioned intervals only when activity-level coverage stability improves enough relative to interval-width cost,
+- otherwise retain global intervals and document why.
+
 Grouped conformal headline values:
-- target coverage: `0.90`
-- mean fold empirical coverage: `0.9169`
-- row-level empirical coverage: `0.9163`
-- mean fold interval width: `18.8001`
+- reported directly from `artifacts/metrics/grouped_cv_conformal_summary.csv`
+- includes row-level coverage, interval width, activity-level coverage-gap stability, and variant-selection reasoning
+
+Classification confidence and calibration outputs (2026-04-13 update):
+- `artifacts/metrics/grouped_cv_classification_calibration_summary.csv`
+- `artifacts/metrics/grouped_cv_classification_reliability_by_bin.csv`
+- `artifacts/metrics/grouped_cv_classification_abstention_summary.csv`
+- figures:
+	- `artifacts/figures/grouped_cv_classification_reliability_curve.png`
+	- `artifacts/figures/grouped_cv_classification_abstention_tradeoff.png`
 
 Focused-ablation support artifacts:
 - `artifacts/metrics/grouped_cv_ablation_fold_metrics.csv`

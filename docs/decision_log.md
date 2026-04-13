@@ -364,3 +364,37 @@ The previous pipeline answered these only partially.
 - Grouped model selections under preferred setup:
 	- regression: `hist_gradient_boosting`
 	- classification: `logistic_regression`
+
+---
+
+## 2026-04-13 Uncertainty diagnostics and confidence-aware classification
+### Decision
+Keep split conformal as the default uncertainty method, but expand evaluation to include:
+1. by-activity and by-subject coverage and interval width,
+2. global vs activity-conditioned conformal comparison,
+3. residual and interval-failure diagnostics,
+4. explicit operating-envelope reporting.
+
+Also treat classification outputs as confidence-bearing decisions by adding calibration and abstention analysis.
+
+### Why
+One overall coverage number was not enough to explain where the telemetry system is trustworthy. The project needed practical diagnostics that show where calibration breaks, where large errors cluster, and how to communicate confidence limits honestly.
+
+### Alternatives rejected
+- keep only global conformal with one headline coverage value
+- add heavier uncertainty methods (ensembles, Bayesian, deep methods) in v1
+- keep classification evaluation only at hard-label accuracy/macro-F1 level
+
+### Consequences
+- Conformal outputs now include global and activity-conditioned variant comparison with explicit width/coverage tradeoff reasoning.
+- New uncertainty diagnostics are exported:
+	- `grouped_cv_uncertainty_failure_by_activity.csv`
+	- `grouped_cv_uncertainty_failure_by_subject.csv`
+	- `grouped_cv_regression_residual_summary.csv`
+	- `grouped_cv_uncertainty_operating_envelope_by_activity.csv`
+- New confidence diagnostics are exported:
+	- `grouped_cv_classification_calibration_summary.csv`
+	- `grouped_cv_classification_reliability_by_bin.csv`
+	- `grouped_cv_classification_abstention_summary.csv`
+- New figures were added for residual distribution, reliability, and abstention tradeoffs.
+- The README and notebook now include explicit limitations and operating-envelope framing.

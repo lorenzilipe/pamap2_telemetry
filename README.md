@@ -87,6 +87,89 @@ The final modeling workflow is subject-aware end to end:
 
 Grouped evaluation artifacts use `grouped_cv_` prefixes under `artifacts/metrics/` and `artifacts/figures/`.
 
+## Uncertainty and confidence outputs
+
+The uncertainty layer is now diagnostic, not decorative.
+
+Regression uncertainty outputs include:
+
+- overall conformal coverage and interval width,
+- by-activity and by-subject coverage and interval width,
+- global vs activity-conditioned conformal comparison,
+- large-error and interval-failure hotspot tables,
+- residual distribution and residual summary statistics,
+- an operating-envelope table that flags fragile activity regimes.
+
+Key metric tables:
+
+- `artifacts/metrics/grouped_cv_conformal_summary.csv`
+- `artifacts/metrics/grouped_cv_conformal_by_activity.csv`
+- `artifacts/metrics/grouped_cv_conformal_by_subject.csv`
+- `artifacts/metrics/grouped_cv_uncertainty_failure_by_activity.csv`
+- `artifacts/metrics/grouped_cv_uncertainty_failure_by_subject.csv`
+- `artifacts/metrics/grouped_cv_regression_residual_summary.csv`
+- `artifacts/metrics/grouped_cv_uncertainty_operating_envelope_by_activity.csv`
+
+Key uncertainty figures:
+
+- `artifacts/figures/grouped_cv_conformal_coverage_by_activity.png`
+- `artifacts/figures/grouped_cv_conformal_interval_failure_by_activity.png`
+- `artifacts/figures/grouped_cv_regression_residual_distribution.png`
+
+Classification is also evaluated as a confidence-aware decision component.
+
+Key confidence/calibration outputs:
+
+- `artifacts/metrics/grouped_cv_classification_calibration_summary.csv`
+- `artifacts/metrics/grouped_cv_classification_reliability_by_bin.csv`
+- `artifacts/metrics/grouped_cv_classification_abstention_summary.csv`
+- `artifacts/figures/grouped_cv_classification_reliability_curve.png`
+- `artifacts/figures/grouped_cv_classification_abstention_tradeoff.png`
+
+## Current limitations and operating envelope
+
+What current activity classification demonstrates:
+
+- strong subject-held-out macro F1 for a compact model set,
+- useful probability signals for confidence-based filtering.
+
+What it does not demonstrate:
+
+- robust calibration under domain shift (new users/devices),
+- production-grade behavior under sensor drift and missing channels.
+
+Heart-rate forecasting interpretation:
+
+- forecasting remains partially persistence-driven,
+- gains beyond persistence are present but not uniform across activities.
+
+Where uncertainty is weakest:
+
+- activities and subjects with higher interval-failure rates and heavier residual tails,
+- activity regimes where activity-conditioned calibration still falls back to global margins due low calibration support.
+
+Current run highlights (from grouped metrics):
+
+- compact changes reduced failure pressure before intervaling:
+  - upgraded features improved grouped mean MAE by about `0.364` bpm versus baseline,
+  - switching to `hr_target_next30s_mean` improved grouped mean MAE by about `2.720` bpm versus direct `t+30s`,
+  - after those changes, interval failures are concentrated mostly in stair activities rather than broadly distributed.
+- weakest interval coverage activity: `ascending_stairs` (coverage about `0.573`),
+- next weakest interval coverage activity: `descending_stairs` (coverage about `0.798`),
+- global conformal remained preferred over activity-conditioned because activity-level coverage-gap gain was small (`+0.009` weighted abs-gap improvement) and did not justify switching policy.
+
+Current confidence diagnostics highlights:
+
+- classification calibration is imperfect but usable (`ECE_10` about `0.073`, multiclass Brier about `0.306`),
+- average confidence is higher than realized accuracy by about `0.073`, so overconfidence should be communicated,
+- abstention tradeoff is practical: threshold `0.8` keeps about `70.8%` of rows and raises retained accuracy to about `0.898`.
+
+Next production-minded improvements (kept lightweight):
+
+- gather more calibration support for hard activities,
+- add a confidence gate policy for classification decisions,
+- target feature updates toward recurring failure hotspots rather than broad model complexity.
+
 ## Principles
 
 - Keep scope disciplined.
