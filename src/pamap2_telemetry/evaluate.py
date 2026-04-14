@@ -31,6 +31,29 @@ LARGE_ERROR_QUANTILE = 0.90
 ABSTENTION_THRESHOLDS = [0.50, 0.60, 0.70, 0.80, 0.90]
 
 
+def _read_preferred_target_col(metrics_dir: Path) -> str | None:
+    preferred_setup_path = metrics_dir / "grouped_cv_preferred_setup_summary.csv"
+    if not preferred_setup_path.exists():
+        return None
+
+    preferred_setup_df = pd.read_csv(preferred_setup_path)
+    if preferred_setup_df.empty:
+        raise ValueError(f"Preferred setup artifact is empty: {preferred_setup_path}")
+    if "preferred_target_col" not in preferred_setup_df.columns:
+        raise ValueError(
+            "Preferred setup artifact is missing preferred_target_col: "
+            f"{preferred_setup_path}"
+        )
+
+    preferred_target_col = str(preferred_setup_df.iloc[0]["preferred_target_col"]).strip()
+    if not preferred_target_col:
+        raise ValueError(
+            "Preferred setup artifact contains an empty preferred_target_col: "
+            f"{preferred_setup_path}"
+        )
+    return preferred_target_col
+
+
 def _regression_scores(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     mse_value = mean_squared_error(y_true, y_pred)
     return {
@@ -1175,7 +1198,7 @@ def run_grouped_evaluation(
     models_dir: Path,
     random_seed: int = RANDOM_SEED,
     alpha: float = ALPHA,
-    regression_target_col: str = "hr_target_30s",
+    regression_target_col: str | None = None,
 ) -> dict[str, Any]:
     if not processed_path.exists():
         raise FileNotFoundError(f"Missing processed model table: {processed_path}")
@@ -1183,6 +1206,28 @@ def run_grouped_evaluation(
     metrics_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     models_dir.mkdir(parents=True, exist_ok=True)
+
+    preferred_target_col = _read_preferred_target_col(metrics_dir)
+    if regression_target_col is None:
+        if preferred_target_col is None:
+            preferred_setup_path = metrics_dir / "grouped_cv_preferred_setup_summary.csv"
+            raise FileNotFoundError(
+                "No regression_target_col was provided and preferred setup artifact is missing. "
+                "Run scripts/compact_ablation_study.py first, or pass regression_target_col explicitly: "
+                f"{preferred_setup_path}"
+            )
+        regression_target_col = preferred_target_col
+
+    regression_target_col = str(regression_target_col).strip()
+    if not regression_target_col:
+        raise ValueError("regression_target_col must be a non-empty column name.")
+
+    if preferred_target_col is not None and regression_target_col != preferred_target_col:
+        preferred_setup_path = metrics_dir / "grouped_cv_preferred_setup_summary.csv"
+        raise ValueError(
+            "Requested regression_target_col does not match preferred_target_col from the preferred setup "
+            f"artifact ({preferred_target_col}). Requested: {regression_target_col}. Artifact: {preferred_setup_path}"
+        )
 
     model_df = pd.read_parquet(processed_path).copy()
     model_df = model_df.sort_values(["subject_id", "timestamp_s"]).reset_index(drop=True)

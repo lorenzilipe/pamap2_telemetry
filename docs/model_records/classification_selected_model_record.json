@@ -4,26 +4,34 @@
   "task": "classification",
   "model_name": "logistic_regression",
   "feature_set": "upgraded",
-  "target_definition": "activity_target",
   "fill_strategy": "current_ffill",
   "split_strategy": "leave-one-subject-out grouped CV",
   "selection_rule": "highest mean macro F1 across LOSO folds, tie-break by lower macro F1 std then higher mean accuracy",
   "hyperparameters": "See model object saved in artifacts/models and grouped_cv_* summaries.",
-  "metrics_summary": {
-    "selected_mean_macro_f1": 0.7426461113160093,
-    "selected_std_macro_f1": 0.080570593659175,
-    "runner_up_mean_macro_f1": 0.7338701742690908,
-    "winner_margin": 0.0087759370469184
-  },
-  "uncertainty_notes": {
-    "method": "split conformal",
-    "preferred_interval_variant": "global",
-    "row_level_empirical_coverage": 0.917649640643002,
-    "row_level_average_interval_width": 18.91749491206437
-  },
   "notes": [
     "Designed to stay lean and interview-defensible.",
     "All temporal operations are subject-local and sorted by timestamp.",
     "Preprocessing and model are packaged in sklearn Pipeline objects for reproducible inference."
+  ],
+  "target_definition": "activity_target",
+  "metrics_summary": {
+    "selected_mean_accuracy": 0.7906897344177626,
+    "selected_std_accuracy": 0.055887418367125,
+    "selected_mean_macro_f1": 0.7359997912369075,
+    "selected_std_macro_f1": 0.0940542693120765,
+    "runner_up_mean_macro_f1": 0.7323997078182704,
+    "winner_margin": 0.0036000834186371
+  },
+  "confidence_diagnostics": {
+    "accuracy": 0.7908048499478795,
+    "macro_f1": 0.7976413328494878,
+    "ece_10": 0.0727017690112293,
+    "multiclass_brier_score": 0.3055298347112232,
+    "mean_confidence": 0.863506618959109,
+    "overconfidence_gap": 0.0727017690112294
+  },
+  "confidence_notes": [
+    "Classification confidence is summarized with ECE and multiclass Brier score.",
+    "At confidence threshold 0.80, the model retained 70.7% of rows with retained accuracy 0.898, and abstained rows captured 65.6% of total classification errors."
   ]
 }

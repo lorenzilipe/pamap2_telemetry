@@ -420,3 +420,26 @@ The notebook-first workflow remains valuable for narrative and interpretation, b
 - Added explicit data contracts in `docs/data_contracts.md` and `docs/schemas/*.json`.
 - Added selected-model experiment records in `artifacts/models/metadata/`.
 - Ensured train/inference preprocessing consistency by using sklearn Pipelines with explicit imputation and scaling where needed.
+
+---
+
+## 2026-04-14 Preferred-target rerun consistency and model-record correction
+### Decision
+Make grouped reruns read the preferred setup artifact for regression target selection, and make experiment records task-specific:
+1. regression record keeps regression metrics plus conformal uncertainty details,
+2. classification record uses classification metrics plus confidence and calibration diagnostics.
+
+### Why
+The standalone grouped rerun flow could drift from the preferred regression target if it used a default target value. Also, classification records incorrectly inherited regression conformal interval notes, which made records inconsistent with task intent.
+
+### Alternatives rejected
+- Keep a hardcoded grouped evaluation target in standalone reruns.
+- Keep one shared uncertainty section for both regression and classification records.
+- Add a larger config system for target management in v1.
+
+### Consequences
+- `scripts/grouped_evaluation.py` now reads `grouped_cv_preferred_setup_summary.csv` and uses `preferred_target_col`.
+- Grouped evaluation fails explicitly if preferred target metadata is missing or inconsistent.
+- `write_experiment_records` now validates preferred-target consistency against grouped summaries.
+- Classification records now include accuracy, macro F1, ECE, multiclass Brier, and abstention notes.
+- Regression records continue to include conformal coverage and interval-width diagnostics.

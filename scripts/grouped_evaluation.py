@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+import pandas as pd
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
@@ -25,8 +27,36 @@ def _default_paths() -> tuple[Path, Path, Path, Path]:
     return processed_path, metrics_dir, figures_dir, models_dir
 
 
+def _load_preferred_regression_target(metrics_dir: Path) -> str:
+    preferred_setup_path = metrics_dir / "grouped_cv_preferred_setup_summary.csv"
+    if not preferred_setup_path.exists():
+        raise FileNotFoundError(
+            "Missing preferred setup artifact. Run scripts/compact_ablation_study.py first: "
+            f"{preferred_setup_path}"
+        )
+
+    preferred_setup_df = pd.read_csv(preferred_setup_path)
+    if preferred_setup_df.empty:
+        raise ValueError(f"Preferred setup artifact is empty: {preferred_setup_path}")
+    if "preferred_target_col" not in preferred_setup_df.columns:
+        raise ValueError(
+            "Preferred setup artifact is missing preferred_target_col: "
+            f"{preferred_setup_path}"
+        )
+
+    preferred_target_col = str(preferred_setup_df.iloc[0]["preferred_target_col"]).strip()
+    if not preferred_target_col:
+        raise ValueError(
+            "Preferred setup artifact contains an empty preferred_target_col: "
+            f"{preferred_setup_path}"
+        )
+    return preferred_target_col
+
+
 def main() -> None:
     processed_path, metrics_dir, figures_dir, models_dir = _default_paths()
+    preferred_target_col = _load_preferred_regression_target(metrics_dir)
+
     results = run_grouped_evaluation(
         processed_path=processed_path,
         metrics_dir=metrics_dir,
@@ -34,10 +64,12 @@ def main() -> None:
         models_dir=models_dir,
         random_seed=RANDOM_SEED,
         alpha=ALPHA,
+        regression_target_col=preferred_target_col,
     )
 
     selected_models_df = results["selected_models"]
     print("Grouped evaluation complete.")
+    print(f"Regression target: {preferred_target_col}")
     print(selected_models_df.to_string(index=False))
 
 

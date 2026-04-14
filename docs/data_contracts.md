@@ -111,10 +111,18 @@ Primary output files:
 - conformal summaries:
   - `artifacts/metrics/grouped_cv_conformal_summary.csv`
   - `artifacts/metrics/grouped_cv_conformal_summary_all_variants.csv`
+- classification confidence summaries:
+  - `artifacts/metrics/grouped_cv_classification_calibration_summary.csv`
+  - `artifacts/metrics/grouped_cv_classification_abstention_summary.csv`
 - prediction-level outputs:
   - `artifacts/metrics/grouped_cv_regression_predictions_all_models.csv`
   - `artifacts/metrics/grouped_cv_classification_predictions_all_models.csv`
   - `artifacts/metrics/grouped_cv_conformal_predictions.csv`
+
+Grouped evaluation target contract:
+- `scripts/grouped_evaluation.py` reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`.
+- The `preferred_target_col` from that file is the default regression target for grouped evaluation reruns.
+- If the preferred setup artifact is missing or inconsistent, grouped evaluation should fail explicitly.
 
 Prediction output requirements:
 - regression predictions include `y_true`, `y_pred`, `subject_id`, `timestamp_s`.
@@ -128,3 +136,12 @@ Experiment record files:
 Runtime copies are also written to `artifacts/models/metadata/` for local runs.
 
 These records provide task, target, split strategy, metrics summary, and uncertainty notes for selected models.
+
+Record content contract:
+- Regression record:
+  - regression metrics (MAE, RMSE, R2 summary fields)
+  - regression uncertainty details from conformal diagnostics (coverage and interval width)
+- Classification record:
+  - classification metrics (accuracy and macro F1 summary fields)
+  - classification calibration and confidence diagnostics (ECE, multiclass Brier score, confidence or abstention notes)
+  - no regression-only conformal interval metrics

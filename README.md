@@ -45,7 +45,7 @@ The goal is a small production-style ML structure without overengineering:
   - `03_modeling_and_uncertainty.ipynb` (thin orchestration + reporting)
 - `scripts/`
   - `compact_ablation_study.py` (thin wrapper to `src`)
-  - `grouped_evaluation.py` (thin wrapper to `src`)
+  - `grouped_evaluation.py` (thin wrapper to `src`, reads preferred target from ablation artifact)
   - `write_experiment_records.py` (writes selected model records)
 - `docs/`
   - scope, dataset, decision log, build recipe, and explicit data contracts
@@ -72,7 +72,7 @@ From repository root:
 python scripts/compact_ablation_study.py
 ```
 
-2. Run grouped evaluation + uncertainty diagnostics
+2. Run grouped evaluation + uncertainty and confidence diagnostics
 ```bash
 python scripts/grouped_evaluation.py
 ```
@@ -81,6 +81,10 @@ python scripts/grouped_evaluation.py
 ```bash
 python scripts/write_experiment_records.py
 ```
+
+Important rerun rule:
+- Step 2 reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv` and uses `preferred_target_col` as the regression target.
+- If that artifact is missing or inconsistent, Step 2 fails explicitly instead of silently falling back to a different target.
 
 Notebook users can run the same flow from:
 - `notebooks/02_feature_pipeline.ipynb`
@@ -102,16 +106,16 @@ From current metric artifacts:
   - target: `hr_target_next30s_mean`
   - fill strategy: `current_ffill`
 - Regression (`hist_gradient_boosting`):
-  - mean MAE: `3.813`
-  - mean RMSE: `5.579`
+  - mean MAE: `3.810`
+  - mean RMSE: `5.578`
   - mean R2: `0.941`
-  - MAE gain vs persistence baseline: `0.318`
+  - MAE gain vs persistence baseline: `0.320`
 - Classification (`logistic_regression`):
-  - mean macro F1: `0.743`
-  - mean accuracy: `0.790`
+  - mean macro F1: `0.736`
+  - mean accuracy: `0.791`
 - Uncertainty (global conformal):
-  - row-level empirical coverage: `0.918` (target `0.900`)
-  - mean interval width: `18.917`
+  - row-level empirical coverage: `0.916` (target `0.900`)
+  - mean interval width: `18.814`
 - Confidence diagnostics:
   - ECE(10): `0.073`
   - multiclass Brier score: `0.306`
