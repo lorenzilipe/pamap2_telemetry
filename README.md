@@ -55,13 +55,13 @@ What is checked:
 
 Current selected-model summary:
 
-| area | headline result |
+| Area | Best result |
 |---|---|
-| regression | HistGradientBoosting, MAE 3.813, RMSE 5.579, R2 0.941 |
-| classification | RandomForest, macro F1 0.744, accuracy 0.777 |
-| uncertainty | global conformal coverage 0.918 at target 0.900, mean width 18.92 |
-| calibration | ECE(10) 0.060, multiclass Brier 0.329 |
-| online-ish stress check | 5-second HR delay increased regression MAE by +0.734 bpm; classification changed only slightly in this run |
+| Regression | HistGradientBoosting, MAE 3.813, RMSE 5.579, R2 0.941 |
+| Classification | RandomForest, macro F1 0.744, accuracy 0.777 |
+| Uncertainty | global conformal coverage 0.918 at target 0.900, mean width 18.92 |
+| Calibration | ECE(10) 0.060, multiclass Brier 0.329 |
+| Online-ish stress check | 5-second HR delay increased regression MAE by +0.734 bpm; classification changed only slightly in this run |
 
 Where it works well:
 - Stable grouped cross-subject evaluation
