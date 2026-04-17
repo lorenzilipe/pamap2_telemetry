@@ -65,41 +65,61 @@ Missingness handling:
   - `limited_ffill_5s`
   - `strict_observed_only`
 
-## Stage 3: Final Model Table
+## Stage 3: Shared Feature/Target Generation (Upstream)
+
+This stage stays shared across tasks and is built once per preferred setup.
+
+Shared columns produced upstream:
+- identifiers: `subject_id`, `session`, `timestamp_s`, `activity_id`, `activity_label`
+- fill metadata: `heart_rate_observed_flag`, `heart_rate_fill_strategy`
+- targets: `activity_target`, `hr_target_30s`, `hr_target_15s`, `hr_target_next30s_mean`
+- selected feature set columns (baseline or upgraded)
+
+Assumptions and validity rules:
+- Temporal features and targets are computed within subject only.
+- Data is sorted by `subject_id`, then `timestamp_s` before lags/rolling/shifts.
+- Upstream generation does not drop classification rows just because a future regression target is missing.
+
+## Stage 4: Task-Specific Model Tables
+
+### Stage 4a: Regression-ready table
 
 Output:
-- `data/processed/pamap2_model_table.parquet`
+- `data/processed/pamap2_model_table_regression.parquet`
+
+Row eligibility:
+- row must have non-null selected feature columns,
+- row must have non-null selected regression target (`preferred_target_col`).
 
 Required identifier/target columns:
 - `subject_id`, `timestamp_s`, `activity_id`, `activity_label`
 - `activity_target`
-- `hr_target_30s`
-- `hr_target_15s`
-- `hr_target_next30s_mean`
-- `heart_rate_fill_strategy`
+- selected regression target column (`preferred_target_col`)
 
-Required feature groups:
-- core signals: `heart_rate_bpm`, accel magnitudes, gyro magnitudes
-- baseline temporal features:
-  - lags (`_lag_1`, `_lag_5`)
-  - rolling means/std (`_rollmean_5`, `_rollstd_5`, `_rollmean_10`, `_rollstd_10`)
-  - delta-from-recent-baseline (`_delta_from_rollmean_5`)
-- upgraded compact features:
-  - HR shape and baseline-relative features
-  - transition-sensitive motion summaries
-  - tiny raw-axis summary subset
+### Stage 4b: Classification-ready table
 
-Assumptions and validity rules:
-- Temporal features and targets are computed within subject only.
-- Table is sorted by `subject_id`, then `timestamp_s` before lags/rolling/shifts.
-- Any row used for model fitting must have non-null selected features and selected target.
+Output:
+- `data/processed/pamap2_model_table_classification.parquet`
 
-Missingness handling:
+Row eligibility:
+- row must have non-null selected feature columns,
+- row must have non-null `activity_target`.
+
+Required identifier/target columns:
+- `subject_id`, `timestamp_s`, `activity_id`, `activity_label`
+- `activity_target`
+
+Design reason for divergence:
+- classification predicts current activity state,
+- regression predicts future heart-rate targets,
+- therefore classification row eligibility must not depend on future-target availability.
+
+Missingness handling (both task tables):
 - Missingness is handled in two layers:
   - row filtering for required training columns,
   - in-pipeline median imputation in sklearn Pipelines for model robustness.
 
-## Stage 4: Model Output Contracts
+## Stage 5: Model Output Contracts
 
 Primary output files:
 - grouped regression fold metrics:
@@ -122,6 +142,9 @@ Primary output files:
 Grouped evaluation target contract:
 - `scripts/grouped_evaluation.py` reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`.
 - The `preferred_target_col` from that file is the default regression target for grouped evaluation reruns.
+- Grouped evaluation reads separate task tables:
+  - `data/processed/pamap2_model_table_regression.parquet`
+  - `data/processed/pamap2_model_table_classification.parquet`
 - If the preferred setup artifact is missing or inconsistent, grouped evaluation should fail explicitly.
 
 Prediction output requirements:

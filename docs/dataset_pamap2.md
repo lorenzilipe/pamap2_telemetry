@@ -261,25 +261,31 @@ Expected columns:
 - heart_rate
 - compact sensor summary features
 
-### Final modeling table
-File:
-- `data/processed/pamap2_model_table.parquet`
+### Final modeling tables (task-specific)
+Files:
+- `data/processed/pamap2_model_table_regression.parquet`
+- `data/processed/pamap2_model_table_classification.parquet`
 
 Schema contract:
 - `docs/schemas/model_table_schema.json`
 
-Implemented additions (Phase 3):
+Both tables are derived from one shared upstream feature/target build.
+
+Shared additions from Phase 3+
 - baseline lag/rolling features
 - targeted upgraded features (19 additional columns)
 - `hr_target_30s`, `hr_target_15s`, `hr_target_next30s_mean`
 - `activity_target`
 - HR fill-policy metadata columns (`heart_rate_fill_strategy`, `heart_rate_observed_flag`)
 
-Final table status after compact upgrade study (2026-04-12):
-- rows: 18,227
-- columns: 86
-- subjects: `101` to `108`
-- preferred fill strategy represented in final table: `current_ffill`
+Row eligibility split (2026-04-17 update):
+- regression-ready table: requires selected features + selected regression target (`preferred_target_col`)
+- classification-ready table: requires selected features + `activity_target` only
+
+Why this split is methodologically correct:
+- classification predicts current activity state,
+- regression predicts future heart-rate targets,
+- future-target missingness should not remove valid classification rows.
 
 Core update artifacts:
 - `artifacts/metrics/grouped_cv_feature_ablation_summary.csv`
@@ -315,7 +321,8 @@ Default:
 
 Implemented in Phase 3:
 - `activity_target = activity_id` (current activity)
-- Rows with missing required features or the active regression target are dropped per setup.
+- Rows used for classification require classification features and `activity_target` only.
+- Classification rows are no longer filtered by regression-target availability.
 
 ### Uncertainty
 - split conformal prediction intervals around the regression model output
@@ -352,8 +359,8 @@ Regression on preferred target `hr_target_next30s_mean` (mean MAE across LOSO fo
 - `persistence_current_hr`: `4.1304`
 
 Classification (mean macro F1 across LOSO folds):
-- `logistic_regression`: `0.7426` (selected)
-- `random_forest`: `0.7339`
+- `random_forest`: `0.7437` (selected)
+- `logistic_regression`: `0.7429`
 
 Selection rule used in code and artifacts:
 - regression: lowest mean MAE, tie-break by lower MAE std then lower mean RMSE

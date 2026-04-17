@@ -123,7 +123,7 @@ By the end of the MVP, the repo should contain:
 
 - raw data in `data/raw/`
 - 1-second telemetry table in `data/interim/`
-- final modeling table in `data/processed/`
+- task-specific modeling tables in `data/processed/` (regression-ready and classification-ready)
 - lean reusable package in `src/pamap2_telemetry/` for ingest/features/splits/train/evaluate/uncertainty logic
 - three notebooks for ingestion, feature engineering, and modeling
 - saved figures

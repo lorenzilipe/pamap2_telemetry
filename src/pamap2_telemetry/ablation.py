@@ -84,7 +84,11 @@ def _default_paths(repo_root: Path) -> dict[str, Path]:
         "metrics_dir": repo_root / "artifacts" / "metrics",
         "figures_dir": repo_root / "artifacts" / "figures",
         "models_dir": repo_root / "artifacts" / "models",
-        "processed_path": repo_root / "data" / "processed" / "pamap2_model_table.parquet",
+        "processed_regression_path": repo_root / "data" / "processed" / "pamap2_model_table_regression.parquet",
+        "processed_classification_path": repo_root
+        / "data"
+        / "processed"
+        / "pamap2_model_table_classification.parquet",
     }
 
 
@@ -615,12 +619,13 @@ def run_compact_ablation_study(
     metrics_dir = paths["metrics_dir"]
     figures_dir = paths["figures_dir"]
     models_dir = paths["models_dir"]
-    processed_path = paths["processed_path"]
+    processed_regression_path = paths["processed_regression_path"]
+    processed_classification_path = paths["processed_classification_path"]
 
     metrics_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     models_dir.mkdir(parents=True, exist_ok=True)
-    processed_path.parent.mkdir(parents=True, exist_ok=True)
+    processed_regression_path.parent.mkdir(parents=True, exist_ok=True)
 
     prefill_df = _load_protocol_per_second_prefill(paths)
 
@@ -779,9 +784,7 @@ def run_compact_ablation_study(
 
     preferred_feature_cols = baseline_features if preferred_feature_set == "baseline" else upgraded_features
     preferred_table_raw = fill_strategy_tables[preferred_fill].copy()
-
-    preferred_required = [*preferred_feature_cols, "activity_target", preferred_target_col]
-    preferred_table = preferred_table_raw.dropna(subset=preferred_required).reset_index(drop=True)
+    preferred_table = preferred_table_raw.copy()
 
     output_columns = [
         "subject_id",
@@ -810,7 +813,35 @@ def run_compact_ablation_study(
     if duplicate_count > 0:
         raise ValueError(f"Preferred table has duplicate subject-second rows: {duplicate_count}")
 
-    preferred_table.to_parquet(processed_path, index=False)
+    regression_required = [*preferred_feature_cols, preferred_target_col]
+    classification_required = [*preferred_feature_cols, "activity_target"]
+
+    regression_table = preferred_table.dropna(subset=regression_required).reset_index(drop=True)
+    classification_table = preferred_table.dropna(subset=classification_required).reset_index(drop=True)
+
+    if regression_table.empty:
+        raise ValueError("Regression-ready table is empty after preferred setup filtering.")
+    if classification_table.empty:
+        raise ValueError("Classification-ready table is empty after preferred setup filtering.")
+
+    regression_table.to_parquet(processed_regression_path, index=False)
+    classification_table.to_parquet(processed_classification_path, index=False)
+
+    task_table_summary_df = pd.DataFrame(
+        [
+            {
+                "preferred_feature_set": preferred_feature_set,
+                "preferred_fill_strategy": preferred_fill,
+                "preferred_target_col": preferred_target_col,
+                "regression_rows": int(len(regression_table)),
+                "classification_rows": int(len(classification_table)),
+                "classification_row_gain_vs_regression": int(len(classification_table) - len(regression_table)),
+                "classification_row_gain_pct_vs_regression": float(
+                    (len(classification_table) - len(regression_table)) / max(len(regression_table), 1)
+                ),
+            }
+        ]
+    )
 
     feature_inventory_df = _build_feature_inventory(preferred_feature_cols, preferred_feature_set)
 
@@ -821,6 +852,7 @@ def run_compact_ablation_study(
     ablation_model_summary_df.to_csv(metrics_dir / "grouped_cv_ablation_model_summaries.csv", index=False)
     feature_inventory_df.to_csv(metrics_dir / "grouped_cv_final_feature_summary.csv", index=False)
     preferred_setup_df.to_csv(metrics_dir / "grouped_cv_preferred_setup_summary.csv", index=False)
+    task_table_summary_df.to_csv(metrics_dir / "grouped_cv_task_table_row_summary.csv", index=False)
 
     _save_ablation_plots(
         feature_ablation_df=feature_ablation_df,
@@ -830,7 +862,8 @@ def run_compact_ablation_study(
     )
 
     grouped_results = run_grouped_evaluation(
-        processed_path=processed_path,
+        regression_processed_path=processed_regression_path,
+        classification_processed_path=processed_classification_path,
         metrics_dir=metrics_dir,
         figures_dir=figures_dir,
         models_dir=models_dir,
@@ -847,6 +880,7 @@ def run_compact_ablation_study(
         "preferred_target_col": preferred_target_col,
         "preferred_feature_set": preferred_feature_set,
         "preferred_fill_strategy": preferred_fill,
+        "task_table_row_summary": task_table_summary_df,
         "grouped_results": grouped_results,
     }
 

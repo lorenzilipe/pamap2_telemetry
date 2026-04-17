@@ -19,12 +19,15 @@ from pamap2_telemetry.evaluate import (  # noqa: E402
 )
 
 
-def _default_paths() -> tuple[Path, Path, Path, Path]:
-    processed_path = REPO_ROOT / "data" / "processed" / "pamap2_model_table.parquet"
+def _default_paths() -> tuple[Path, Path, Path, Path, Path]:
+    regression_processed_path = REPO_ROOT / "data" / "processed" / "pamap2_model_table_regression.parquet"
+    classification_processed_path = (
+        REPO_ROOT / "data" / "processed" / "pamap2_model_table_classification.parquet"
+    )
     metrics_dir = REPO_ROOT / "artifacts" / "metrics"
     figures_dir = REPO_ROOT / "artifacts" / "figures"
     models_dir = REPO_ROOT / "artifacts" / "models"
-    return processed_path, metrics_dir, figures_dir, models_dir
+    return regression_processed_path, classification_processed_path, metrics_dir, figures_dir, models_dir
 
 
 def _load_preferred_regression_target(metrics_dir: Path) -> str:
@@ -54,11 +57,18 @@ def _load_preferred_regression_target(metrics_dir: Path) -> str:
 
 
 def main() -> None:
-    processed_path, metrics_dir, figures_dir, models_dir = _default_paths()
+    (
+        regression_processed_path,
+        classification_processed_path,
+        metrics_dir,
+        figures_dir,
+        models_dir,
+    ) = _default_paths()
     preferred_target_col = _load_preferred_regression_target(metrics_dir)
 
     results = run_grouped_evaluation(
-        processed_path=processed_path,
+        regression_processed_path=regression_processed_path,
+        classification_processed_path=classification_processed_path,
         metrics_dir=metrics_dir,
         figures_dir=figures_dir,
         models_dir=models_dir,

@@ -100,7 +100,7 @@ The MVP should be small, clean, and interview-defensible.
 
 This project is successful if it produces:
 
-- one clean telemetry modeling table
+- one shared upstream telemetry pipeline and task-specific downstream modeling tables
 - one subject-grouped evaluation workflow
 - one honest regression result
 - one honest classification result

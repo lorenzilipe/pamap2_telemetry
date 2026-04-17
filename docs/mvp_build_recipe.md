@@ -66,16 +66,20 @@ With:
 - saved figures
 - saved metrics tables
 
-## 2.2. One strong modeling table
+## 2.2. Shared upstream features with task-specific model tables
 
-A clean per-time-step feature table with:
+A clean per-time-step upstream feature/target table should feed two downstream task-specific tables:
+- regression-ready rows (selected features + regression target)
+- classification-ready rows (selected features + activity target)
+
+Shared upstream content includes:
 - subject ID
 - timestamp
 - activity label
 - heart rate
 - sensor summary features
 - lagged and rolling features
-- future heart-rate target
+- future heart-rate targets and activity target
 
 ## 2.3. One finished notebook story
 
@@ -473,18 +477,18 @@ Try the simple shift first.
 Use:
 - `activity_target = current activity_id`
 
-## 3.5. Drop rows made invalid by windowing
-After creating lagged and future targets:
-- drop rows with insufficient past window
-- drop rows without future target
-- drop rows with missing essential features
+## 3.5. Apply task-specific row eligibility
+After creating lagged features and targets:
+- regression-ready rows: drop rows with missing selected features or missing selected regression target
+- classification-ready rows: drop rows with missing selected features or missing `activity_target`
 
-## 3.6. Save the final modeling table
+## 3.6. Save task-specific modeling tables
 Write to:
-- `data/processed/pamap2_model_table.parquet`
+- `data/processed/pamap2_model_table_regression.parquet`
+- `data/processed/pamap2_model_table_classification.parquet`
 
 ### Definition of done for Phase 3
-You have one final supervised-learning table.
+You have one shared upstream feature/target build and two task-specific supervised-learning tables.
 
 ---
 

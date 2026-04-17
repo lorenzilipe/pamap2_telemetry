@@ -1,6 +1,6 @@
 {
   "record_version": "v1",
-  "record_date": "2026-04-13",
+  "record_date": "2026-04-17",
   "task": "regression",
   "model_name": "hist_gradient_boosting",
   "feature_set": "upgraded",
@@ -15,18 +15,18 @@
   ],
   "target_definition": "hr_target_next30s_mean",
   "metrics_summary": {
-    "selected_mean_mae": 3.8100268433782793,
-    "selected_std_mae": 0.6903772891339807,
-    "selected_mean_rmse": 5.5782904358508985,
-    "selected_mean_r2": 0.9408325520539368,
-    "runner_up_mean_mae": 3.947148390154804,
-    "winner_margin": 0.137121546776525
+    "selected_mean_mae": 3.812660852771272,
+    "selected_std_mae": 0.6895303002472756,
+    "selected_mean_rmse": 5.579173549920392,
+    "selected_mean_r2": 0.9407798267803829,
+    "runner_up_mean_mae": 3.948291076126488,
+    "winner_margin": 0.1356302233552151
   },
   "uncertainty_notes": {
     "method": "split conformal",
     "preferred_interval_variant": "global",
-    "selection_reason": "Global split conformal retained: conditioning did not improve activity-level coverage enough after width tradeoff (gap improvement=0.0085, width ratio=0.997).",
-    "row_level_empirical_coverage": 0.9163329127119108,
-    "row_level_average_interval_width": 18.81404367039553
+    "selection_reason": "Global split conformal retained: conditioning did not improve activity-level coverage enough after width tradeoff (gap improvement=0.0091, width ratio=0.997).",
+    "row_level_empirical_coverage": 0.917649640643002,
+    "row_level_average_interval_width": 18.91749491206437
   }
 }

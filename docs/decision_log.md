@@ -443,3 +443,25 @@ The standalone grouped rerun flow could drift from the preferred regression targ
 - `write_experiment_records` now validates preferred-target consistency against grouped summaries.
 - Classification records now include accuracy, macro F1, ECE, multiclass Brier, and abstention notes.
 - Regression records continue to include conformal coverage and interval-width diagnostics.
+
+---
+
+## 2026-04-17 Task-specific modeling tables for regression and classification
+### Decision
+Keep one shared upstream telemetry/feature pipeline, but split downstream processed tables into:
+1. `data/processed/pamap2_model_table_regression.parquet`
+2. `data/processed/pamap2_model_table_classification.parquet`
+
+### Why
+Classification predicts current activity and should use all rows valid for classification features and `activity_target`. It should not lose rows only because a future heart-rate regression target is missing.
+
+### Alternatives rejected
+- Keep one shared final filtered table for both tasks.
+- Keep classification tied to the preferred regression target filter.
+- Build a large multi-dataset framework.
+
+### Consequences
+- Compact ablation now writes task-specific processed tables from the same preferred upstream setup.
+- Grouped evaluation now reads both tables and evaluates each task on its own eligible rows under the same subject-grouped logic.
+- Added row-retention artifact: `artifacts/metrics/grouped_cv_task_table_row_summary.csv`.
+- Docs and schema contracts now explicitly describe why regression and classification diverge only at downstream row eligibility.

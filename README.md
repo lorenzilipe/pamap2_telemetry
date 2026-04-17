@@ -7,6 +7,10 @@ This repository shows one shared telemetry pipeline that supports three tasks:
 2. classification: classify current activity state,
 3. uncertainty: add split conformal prediction intervals to regression outputs.
 
+Downstream modeling now uses task-specific tables:
+- regression-ready table: rows valid for selected regression features + selected regression target,
+- classification-ready table: rows valid for selected classification features + activity target only.
+
 The project is intentionally simple by design:
 - local only,
 - Python only,
@@ -85,6 +89,9 @@ python scripts/write_experiment_records.py
 Important rerun rule:
 - Step 2 reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv` and uses `preferred_target_col` as the regression target.
 - If that artifact is missing or inconsistent, Step 2 fails explicitly instead of silently falling back to a different target.
+- Step 1 writes task-specific processed tables under `data/processed/`:
+  - `pamap2_model_table_regression.parquet`
+  - `pamap2_model_table_classification.parquet`
 
 Notebook users can run the same flow from:
 - `notebooks/02_feature_pipeline.ipynb`
@@ -93,7 +100,7 @@ Notebook users can run the same flow from:
 ## Final methods (selected)
 
 - Regression model: `hist_gradient_boosting` (with in-pipeline median imputation).
-- Classification model: `logistic_regression` (median imputation + scaling + logistic regression pipeline).
+- Classification model: `random_forest` (median imputation + random forest pipeline).
 - Split strategy: leave-one-subject-out grouped CV.
 - Preferred conformal variant: global split conformal.
 
@@ -110,12 +117,12 @@ From current metric artifacts:
   - mean RMSE: `5.578`
   - mean R2: `0.941`
   - MAE gain vs persistence baseline: `0.320`
-- Classification (`logistic_regression`):
-  - mean macro F1: `0.736`
-  - mean accuracy: `0.791`
+- Classification (`random_forest`):
+  - mean macro F1: `0.744`
+  - mean accuracy: `0.777`
 - Uncertainty (global conformal):
-  - row-level empirical coverage: `0.916` (target `0.900`)
-  - mean interval width: `18.814`
+  - row-level empirical coverage: `0.918` (target `0.900`)
+  - mean interval width: `18.920`
 - Confidence diagnostics:
   - ECE(10): `0.073`
   - multiclass Brier score: `0.306`

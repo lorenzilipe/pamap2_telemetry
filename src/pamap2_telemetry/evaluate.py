@@ -1191,8 +1191,51 @@ def _save_plots(
         plt.close(fig)
 
 
+def _load_and_validate_model_table(
+    table_path: Path,
+    required_columns: list[str],
+    task_name: str,
+) -> pd.DataFrame:
+    if not table_path.exists():
+        raise FileNotFoundError(f"Missing {task_name} processed model table: {table_path}")
+
+    model_df = pd.read_parquet(table_path).copy()
+    model_df = model_df.sort_values(["subject_id", "timestamp_s"]).reset_index(drop=True)
+
+    missing_required = [column for column in required_columns if column not in model_df.columns]
+    if missing_required:
+        raise ValueError(
+            f"Missing required columns in {task_name} processed table ({table_path}): {missing_required}"
+        )
+
+    duplicate_count = int(model_df.duplicated(subset=["subject_id", "timestamp_s"]).sum())
+    if duplicate_count > 0:
+        raise ValueError(f"Found duplicate subject-second rows in {task_name} table ({table_path}): {duplicate_count}")
+
+    return model_df
+
+
+def _infer_feature_columns(model_df: pd.DataFrame) -> list[str]:
+    non_feature_cols = {
+        "subject_id",
+        "session",
+        "timestamp_s",
+        "activity_id",
+        "activity_label",
+        "activity_target",
+        "heart_rate_observed_flag",
+        "heart_rate_fill_strategy",
+    }
+    return [
+        column
+        for column in model_df.columns
+        if column not in non_feature_cols and not column.startswith("hr_target_")
+    ]
+
+
 def run_grouped_evaluation(
-    processed_path: Path,
+    regression_processed_path: Path,
+    classification_processed_path: Path,
     metrics_dir: Path,
     figures_dir: Path,
     models_dir: Path,
@@ -1200,9 +1243,6 @@ def run_grouped_evaluation(
     alpha: float = ALPHA,
     regression_target_col: str | None = None,
 ) -> dict[str, Any]:
-    if not processed_path.exists():
-        raise FileNotFoundError(f"Missing processed model table: {processed_path}")
-
     metrics_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -1229,10 +1269,7 @@ def run_grouped_evaluation(
             f"artifact ({preferred_target_col}). Requested: {regression_target_col}. Artifact: {preferred_setup_path}"
         )
 
-    model_df = pd.read_parquet(processed_path).copy()
-    model_df = model_df.sort_values(["subject_id", "timestamp_s"]).reset_index(drop=True)
-
-    required_columns = [
+    regression_required_columns = [
         "subject_id",
         "timestamp_s",
         "activity_target",
@@ -1240,39 +1277,58 @@ def run_grouped_evaluation(
         "heart_rate_bpm",
         regression_target_col,
     ]
-    missing_required = [column for column in required_columns if column not in model_df.columns]
-    if missing_required:
-        raise ValueError(f"Missing required columns in processed table: {missing_required}")
-
-    duplicate_count = int(model_df.duplicated(subset=["subject_id", "timestamp_s"]).sum())
-    if duplicate_count > 0:
-        raise ValueError(f"Found duplicate subject-second rows: {duplicate_count}")
-
-    non_feature_cols = {
+    classification_required_columns = [
         "subject_id",
-        "session",
         "timestamp_s",
-        "activity_id",
-        "activity_label",
         "activity_target",
-        "heart_rate_observed_flag",
-        "heart_rate_fill_strategy",
-        "hr_target_30s",
-    }
-    feature_cols = [
-        column
-        for column in model_df.columns
-        if column not in non_feature_cols and not column.startswith("hr_target_")
+        "activity_label",
+        "heart_rate_bpm",
     ]
 
-    x_df = model_df[feature_cols]
-    y_reg = model_df[regression_target_col]
-    y_cls = model_df["activity_target"].astype(int)
-    groups = model_df["subject_id"].astype(int)
+    regression_df = _load_and_validate_model_table(
+        table_path=regression_processed_path,
+        required_columns=regression_required_columns,
+        task_name="regression",
+    )
+    classification_df = _load_and_validate_model_table(
+        table_path=classification_processed_path,
+        required_columns=classification_required_columns,
+        task_name="classification",
+    )
 
-    meta_df = model_df[["subject_id", "timestamp_s", "activity_target", "activity_label"]].copy()
+    regression_feature_cols = _infer_feature_columns(regression_df)
+    classification_feature_cols = _infer_feature_columns(classification_df)
+
+    if not regression_feature_cols:
+        raise ValueError("No feature columns detected in regression processed table.")
+    if not classification_feature_cols:
+        raise ValueError("No feature columns detected in classification processed table.")
+
+    regression_feature_set = set(regression_feature_cols)
+    classification_feature_set = set(classification_feature_cols)
+    if regression_feature_set != classification_feature_set:
+        missing_in_classification = sorted(regression_feature_set.difference(classification_feature_set))
+        missing_in_regression = sorted(classification_feature_set.difference(regression_feature_set))
+        raise ValueError(
+            "Regression and classification feature columns must match for grouped evaluation. "
+            f"Missing in classification={missing_in_classification}. "
+            f"Missing in regression={missing_in_regression}."
+        )
+
+    feature_cols = regression_feature_cols
+
+    x_reg_df = regression_df[feature_cols]
+    y_reg = regression_df[regression_target_col]
+    groups_reg = regression_df["subject_id"].astype(int)
+    meta_reg_df = regression_df[["subject_id", "timestamp_s", "activity_target", "activity_label"]].copy()
+
+    x_cls_df = classification_df[feature_cols]
+    y_cls = classification_df["activity_target"].astype(int)
+    groups_cls = classification_df["subject_id"].astype(int)
+    meta_cls_df = classification_df[["subject_id", "timestamp_s", "activity_target", "activity_label"]].copy()
+
     label_lookup = (
-        model_df[["activity_target", "activity_label"]]
+        classification_df[["activity_target", "activity_label"]]
         .drop_duplicates()
         .set_index("activity_target")["activity_label"]
         .to_dict()
@@ -1283,17 +1339,17 @@ def run_grouped_evaluation(
     classification_specs = _build_classification_model_specs(random_seed)
 
     regression_fold_df, regression_pred_df = _run_grouped_cv_regression(
-        x_df=x_df,
+        x_df=x_reg_df,
         y=y_reg,
-        groups=groups,
-        meta_df=meta_df,
+        groups=groups_reg,
+        meta_df=meta_reg_df,
         model_specs=regression_specs,
     )
     classification_fold_df, classification_pred_df = _run_grouped_cv_classification(
-        x_df=x_df,
+        x_df=x_cls_df,
         y=y_cls,
-        groups=groups,
-        meta_df=meta_df,
+        groups=groups_cls,
+        meta_df=meta_cls_df,
         model_specs=classification_specs,
         class_labels=class_labels,
     )
@@ -1340,10 +1396,10 @@ def run_grouped_evaluation(
         conformal_by_activity_all_df,
     ) = (
         _run_grouped_conformal(
-            x_df=x_df,
+            x_df=x_reg_df,
             y=y_reg,
-            groups=groups,
-            meta_df=meta_df,
+            groups=groups_reg,
+            meta_df=meta_reg_df,
             selected_regression_model=selected_regression_model,
             model_specs=regression_specs,
             alpha=alpha,
@@ -1419,6 +1475,8 @@ def run_grouped_evaluation(
         output_df["regression_target_col"] = regression_target_col
 
     selected_models_df["preferred_conformal_variant"] = preferred_conformal_variant
+    selected_models_df["regression_rows_used"] = int(len(regression_df))
+    selected_models_df["classification_rows_used"] = int(len(classification_df))
     conformal_summary_df["preferred_interval_variant"] = 1
     conformal_summary_all_df["preferred_interval_variant"] = (
         conformal_summary_all_df["calibration_variant"] == preferred_conformal_variant
@@ -1428,11 +1486,11 @@ def run_grouped_evaluation(
     reg_model_to_save = _fit_if_needed(
         selected_regression_model,
         regression_specs[selected_regression_model],
-        x_df,
+        x_reg_df,
         y_reg,
     )
     cls_model_to_save = clone(classification_specs[selected_classification_model])
-    cls_model_to_save.fit(x_df, y_cls)
+    cls_model_to_save.fit(x_cls_df, y_cls)
 
     if reg_model_to_save is not None:
         joblib.dump(reg_model_to_save, models_dir / "grouped_cv_selected_regression_model.joblib")
@@ -1530,22 +1588,32 @@ def run_grouped_evaluation(
         "uncertainty_failure_by_subject": uncertainty_failure_by_subject_df,
         "regression_residual_summary": regression_residual_summary_df,
         "uncertainty_operating_envelope": operating_envelope_by_activity_df,
+        "regression_rows_used": int(len(regression_df)),
+        "classification_rows_used": int(len(classification_df)),
     }
 
 
-def _default_paths() -> tuple[Path, Path, Path, Path]:
+def _default_paths() -> tuple[Path, Path, Path, Path, Path]:
     repo_root = Path(__file__).resolve().parents[2]
-    processed_path = repo_root / "data" / "processed" / "pamap2_model_table.parquet"
+    regression_processed_path = repo_root / "data" / "processed" / "pamap2_model_table_regression.parquet"
+    classification_processed_path = repo_root / "data" / "processed" / "pamap2_model_table_classification.parquet"
     metrics_dir = repo_root / "artifacts" / "metrics"
     figures_dir = repo_root / "artifacts" / "figures"
     models_dir = repo_root / "artifacts" / "models"
-    return processed_path, metrics_dir, figures_dir, models_dir
+    return regression_processed_path, classification_processed_path, metrics_dir, figures_dir, models_dir
 
 
 def main() -> None:
-    processed_path, metrics_dir, figures_dir, models_dir = _default_paths()
+    (
+        regression_processed_path,
+        classification_processed_path,
+        metrics_dir,
+        figures_dir,
+        models_dir,
+    ) = _default_paths()
     results = run_grouped_evaluation(
-        processed_path=processed_path,
+        regression_processed_path=regression_processed_path,
+        classification_processed_path=classification_processed_path,
         metrics_dir=metrics_dir,
         figures_dir=figures_dir,
         models_dir=models_dir,

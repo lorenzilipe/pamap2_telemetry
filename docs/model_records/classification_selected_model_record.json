@@ -1,8 +1,8 @@
 {
   "record_version": "v1",
-  "record_date": "2026-04-13",
+  "record_date": "2026-04-17",
   "task": "classification",
-  "model_name": "logistic_regression",
+  "model_name": "random_forest",
   "feature_set": "upgraded",
   "fill_strategy": "current_ffill",
   "split_strategy": "leave-one-subject-out grouped CV",
@@ -15,23 +15,23 @@
   ],
   "target_definition": "activity_target",
   "metrics_summary": {
-    "selected_mean_accuracy": 0.7906897344177626,
-    "selected_std_accuracy": 0.055887418367125,
-    "selected_mean_macro_f1": 0.7359997912369075,
-    "selected_std_macro_f1": 0.0940542693120765,
-    "runner_up_mean_macro_f1": 0.7323997078182704,
-    "winner_margin": 0.0036000834186371
+    "selected_mean_accuracy": 0.7766895407826729,
+    "selected_std_accuracy": 0.0897415417009041,
+    "selected_mean_macro_f1": 0.7436771309714573,
+    "selected_std_macro_f1": 0.0818615324694499,
+    "runner_up_mean_macro_f1": 0.7429047029316542,
+    "winner_margin": 0.000772428039803
   },
   "confidence_diagnostics": {
-    "accuracy": 0.7908048499478795,
-    "macro_f1": 0.7976413328494878,
-    "ece_10": 0.0727017690112293,
-    "multiclass_brier_score": 0.3055298347112232,
-    "mean_confidence": 0.863506618959109,
-    "overconfidence_gap": 0.0727017690112294
+    "accuracy": 0.7737585964152272,
+    "macro_f1": 0.7940859674952577,
+    "ece_10": 0.0596070418856223,
+    "multiclass_brier_score": 0.3291108146254841,
+    "mean_confidence": 0.7287897596716588,
+    "overconfidence_gap": -0.0449688367435683
   },
   "confidence_notes": [
     "Classification confidence is summarized with ECE and multiclass Brier score.",
-    "At confidence threshold 0.80, the model retained 70.7% of rows with retained accuracy 0.898, and abstained rows captured 65.6% of total classification errors."
+    "At confidence threshold 0.80, the model retained 42.7% of rows with retained accuracy 0.924, and abstained rows captured 85.6% of total classification errors."
   ]
 }
