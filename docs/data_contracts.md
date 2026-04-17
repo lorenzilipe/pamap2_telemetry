@@ -64,6 +64,9 @@ Missingness handling:
   - `current_ffill`
   - `limited_ffill_5s`
   - `strict_observed_only`
+- Online-ish evaluation mode (for sensitivity checks only):
+  - `onlineish_hr_delay_5s`
+  - This is not a fill strategy. It is an evaluation stress mode that delays HR availability by 5 seconds before feature generation.
 
 ## Stage 3: Shared Feature/Target Generation (Upstream)
 
@@ -138,6 +141,21 @@ Primary output files:
   - `artifacts/metrics/grouped_cv_regression_predictions_all_models.csv`
   - `artifacts/metrics/grouped_cv_classification_predictions_all_models.csv`
   - `artifacts/metrics/grouped_cv_conformal_predictions.csv`
+- online-ish stress-test outputs:
+  - `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
+  - `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`
+
+Online-ish comparison contract:
+- `grouped_cv_onlineish_comparison_summary.csv` contains one row per evaluation mode.
+- required mode values:
+  - `offline_standard`
+  - `onlineish_hr_delay_5s`
+- required delayed-HR metadata:
+  - `hr_delay_seconds`
+- required compact comparison metrics:
+  - regression: `regression_mean_mae`, `regression_mean_rmse`, `regression_mean_r2`
+  - classification: `classification_mean_macro_f1`, `classification_mean_accuracy`
+  - deltas: metric deltas versus offline baseline
 
 Grouped evaluation target contract:
 - `scripts/grouped_evaluation.py` reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`.

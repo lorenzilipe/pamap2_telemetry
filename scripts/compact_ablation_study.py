@@ -20,8 +20,11 @@ def main() -> None:
     )
 
     preferred_df = results["preferred_setup"]
+    onlineish_df = results["onlineish_comparison"]
     print("Compact ablation study complete.")
     print(preferred_df.to_string(index=False))
+    print("\nOffline vs online-ish delayed-HR comparison:")
+    print(onlineish_df.to_string(index=False))
 
 
 if __name__ == "__main__":

@@ -103,6 +103,7 @@ Notebook users can run the same flow from:
 - Classification model: `random_forest` (median imputation + random forest pipeline).
 - Split strategy: leave-one-subject-out grouped CV.
 - Preferred conformal variant: global split conformal.
+- Online-ish stress mode: `onlineish_hr_delay_5s` (fixed 5-second HR availability delay before HR-derived feature generation).
 
 ## Key grouped results
 
@@ -113,10 +114,10 @@ From current metric artifacts:
   - target: `hr_target_next30s_mean`
   - fill strategy: `current_ffill`
 - Regression (`hist_gradient_boosting`):
-  - mean MAE: `3.810`
-  - mean RMSE: `5.578`
+  - mean MAE: `3.813`
+  - mean RMSE: `5.579`
   - mean R2: `0.941`
-  - MAE gain vs persistence baseline: `0.320`
+  - MAE gain vs persistence baseline: `0.318`
 - Classification (`random_forest`):
   - mean macro F1: `0.744`
   - mean accuracy: `0.777`
@@ -126,6 +127,33 @@ From current metric artifacts:
 - Confidence diagnostics:
   - ECE(10): `0.073`
   - multiclass Brier score: `0.306`
+
+## Online-ish delayed-HR check
+
+One lightweight online-ish mode is now run in compact ablation to test dependence on offline convenience assumptions:
+- mode: `onlineish_hr_delay_5s`
+- simulated condition: heart-rate input is available only with a fixed 5-second lag
+- causal rule: HR-derived features use only delayed HR values, while non-HR telemetry stays current
+- target rule: regression targets remain true future HR values
+
+Compact comparison (`artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`):
+
+| evaluation_mode | hr_delay_seconds | regression_mean_mae | regression_mean_rmse | regression_mean_r2 | classification_mean_macro_f1 | classification_mean_accuracy |
+|---|---:|---:|---:|---:|---:|---:|
+| offline_standard | 0 | 3.813 | 5.579 | 0.941 | 0.744 | 0.777 |
+| onlineish_hr_delay_5s | 5 | 4.546 | 6.473 | 0.920 | 0.745 | 0.785 |
+
+What changed:
+- regression MAE increased by `+0.734` bpm
+- regression RMSE increased by `+0.894` bpm
+- regression R2 decreased by `-0.021`
+- classification macro F1 and accuracy changes stayed small in this run (`+0.002` and `+0.009`)
+
+Interpretation:
+- Forecast performance remains useful, but a meaningful part of regression accuracy depends on immediate HR availability.
+- Classification appears less sensitive to this delayed-HR condition in the current feature/model setup.
+- The largest online-ish risk signal is in regression error growth, not in class discrimination.
+- Activity-level regression sensitivity is uneven: descending stairs, running, and nordic walking show the largest MAE increases in `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`.
 
 ## Where it performs well
 
@@ -140,6 +168,14 @@ From current metric artifacts:
 - Forecasting remains partly persistence-driven.
 - Calibration quality is usable but not perfect under harder regimes.
 - This is not a deployment-grade system (no drift handling, no streaming constraints).
+
+## Limitations Of The Online-ish Check
+
+- This is a lightweight simulation, not a streaming deployment test.
+- Only one delay scenario is simulated (fixed 5-second HR lag).
+- It does not model packet loss, variable latency jitter, device clock drift, or inference-time compute delays.
+- It does not include online model updates or drift adaptation.
+- It shows sensitivity to stale HR inputs, but does not prove production readiness.
 
 ## Why simplicity is explicit
 

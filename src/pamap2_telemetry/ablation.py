@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -71,6 +72,11 @@ TARGET_VARIANTS = {
     "mean_next_30s": "hr_target_next30s_mean",
     "direct_15s": "hr_target_15s",
 }
+
+OFFLINE_EVALUATION_MODE = "offline_standard"
+ONLINEISH_EVALUATION_MODE = "onlineish_hr_delay_5s"
+ONLINEISH_HR_DELAY_SECONDS = 5
+MEANINGFUL_CLASSIFICATION_DELTA = 0.01
 
 
 def _default_paths(repo_root: Path) -> dict[str, Path]:
@@ -261,6 +267,262 @@ def _apply_fill_strategy(prefill_df: pd.DataFrame, fill_strategy: str) -> pd.Dat
 def _future_window_mean(series: pd.Series, horizon: int) -> pd.Series:
     shifted = series.shift(-1)
     return shifted.iloc[::-1].rolling(window=horizon, min_periods=horizon).mean().iloc[::-1]
+
+
+def _apply_hr_availability_delay(filled_df: pd.DataFrame, delay_seconds: int) -> pd.DataFrame:
+    """Simulate stale HR by making HR available only after a fixed delay."""
+    if delay_seconds < 1:
+        raise ValueError(f"delay_seconds must be >= 1, got {delay_seconds}")
+
+    delayed_df = filled_df.sort_values(["subject_id", "timestamp_s"]).reset_index(drop=True).copy()
+
+    delayed_df["heart_rate_bpm"] = delayed_df.groupby("subject_id", sort=False)["heart_rate_bpm"].shift(delay_seconds)
+    delayed_df["heart_rate_observed_flag"] = (
+        delayed_df.groupby("subject_id", sort=False)["heart_rate_observed_flag"]
+        .shift(delay_seconds)
+        .fillna(0)
+        .astype(int)
+    )
+
+    delayed_df["heart_rate_fill_strategy"] = (
+        delayed_df["heart_rate_fill_strategy"].astype(str)
+        + f"_with_hr_availability_delay_{delay_seconds}s"
+    )
+    return delayed_df
+
+
+def _prepare_output_columns(model_table: pd.DataFrame, preferred_feature_cols: list[str]) -> pd.DataFrame:
+    output_columns = [
+        "subject_id",
+        "session",
+        "timestamp_s",
+        "activity_id",
+        "activity_label",
+        "heart_rate_bpm",
+        "heart_rate_observed_flag",
+        "heart_rate_fill_strategy",
+        *preferred_feature_cols,
+        "hr_target_30s",
+        "hr_target_15s",
+        "hr_target_next30s_mean",
+        "activity_target",
+    ]
+
+    deduped_output_columns: list[str] = []
+    seen_columns: set[str] = set()
+    for column_name in output_columns:
+        if column_name in model_table.columns and column_name not in seen_columns:
+            deduped_output_columns.append(column_name)
+            seen_columns.add(column_name)
+
+    prepared_table = model_table[deduped_output_columns].copy()
+    duplicate_count = int(prepared_table.duplicated(subset=["subject_id", "timestamp_s"]).sum())
+    if duplicate_count > 0:
+        raise ValueError(f"Model table has duplicate subject-second rows: {duplicate_count}")
+
+    return prepared_table
+
+
+def _build_task_tables(
+    model_table: pd.DataFrame,
+    preferred_feature_cols: list[str],
+    preferred_target_col: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    regression_required = [*preferred_feature_cols, preferred_target_col]
+    classification_required = [*preferred_feature_cols, "activity_target"]
+
+    regression_table = model_table.dropna(subset=regression_required).reset_index(drop=True)
+    classification_table = model_table.dropna(subset=classification_required).reset_index(drop=True)
+
+    if regression_table.empty:
+        raise ValueError("Regression-ready table is empty after preferred setup filtering.")
+    if classification_table.empty:
+        raise ValueError("Classification-ready table is empty after preferred setup filtering.")
+
+    return regression_table, classification_table
+
+
+def _extract_task_model(selected_models_df: pd.DataFrame, task_name: str) -> str:
+    task_rows = selected_models_df[selected_models_df["task"] == task_name]
+    if task_rows.empty:
+        raise ValueError(f"Selected model summary is missing task: {task_name}")
+    return str(task_rows.iloc[0]["selected_model"])
+
+
+def _extract_metric(summary_df: pd.DataFrame, model_name: str, column: str) -> float:
+    model_rows = summary_df[summary_df["model"] == model_name]
+    if model_rows.empty:
+        raise ValueError(f"Model '{model_name}' not found in summary table.")
+    return float(model_rows.iloc[0][column])
+
+
+def _build_onlineish_comparison_summary(
+    offline_results: dict[str, Any],
+    onlineish_results: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    offline_selected_models = offline_results["selected_models"].copy()
+
+    preferred_regression_model = _extract_task_model(offline_selected_models, "regression")
+    preferred_classification_model = _extract_task_model(offline_selected_models, "classification")
+
+    mode_rows: list[dict[str, Any]] = []
+    for evaluation_mode, hr_delay_seconds, mode_results in [
+        (OFFLINE_EVALUATION_MODE, 0, offline_results),
+        (ONLINEISH_EVALUATION_MODE, ONLINEISH_HR_DELAY_SECONDS, onlineish_results),
+    ]:
+        regression_summary = mode_results["regression_summary"].copy()
+        classification_summary = mode_results["classification_summary"].copy()
+        selected_models = mode_results["selected_models"].copy()
+
+        mode_regression_model = _extract_task_model(selected_models, "regression")
+        mode_classification_model = _extract_task_model(selected_models, "classification")
+
+        mode_rows.append(
+            {
+                "evaluation_mode": evaluation_mode,
+                "hr_delay_seconds": int(hr_delay_seconds),
+                "preferred_regression_model": preferred_regression_model,
+                "mode_selected_regression_model": mode_regression_model,
+                "regression_model_changed_vs_offline": int(mode_regression_model != preferred_regression_model),
+                "regression_mean_mae": _extract_metric(
+                    regression_summary,
+                    preferred_regression_model,
+                    "mean_mae",
+                ),
+                "regression_mean_rmse": _extract_metric(
+                    regression_summary,
+                    preferred_regression_model,
+                    "mean_rmse",
+                ),
+                "regression_mean_r2": _extract_metric(
+                    regression_summary,
+                    preferred_regression_model,
+                    "mean_r2",
+                ),
+                "preferred_classification_model": preferred_classification_model,
+                "mode_selected_classification_model": mode_classification_model,
+                "classification_model_changed_vs_offline": int(
+                    mode_classification_model != preferred_classification_model
+                ),
+                "classification_mean_macro_f1": _extract_metric(
+                    classification_summary,
+                    preferred_classification_model,
+                    "mean_macro_f1",
+                ),
+                "classification_mean_accuracy": _extract_metric(
+                    classification_summary,
+                    preferred_classification_model,
+                    "mean_accuracy",
+                ),
+                "regression_rows_used": int(mode_results["regression_rows_used"]),
+                "classification_rows_used": int(mode_results["classification_rows_used"]),
+            }
+        )
+
+    comparison_df = pd.DataFrame(mode_rows)
+    offline_row = comparison_df[comparison_df["evaluation_mode"] == OFFLINE_EVALUATION_MODE].iloc[0]
+
+    comparison_df["regression_mae_delta_vs_offline"] = (
+        comparison_df["regression_mean_mae"] - float(offline_row["regression_mean_mae"])
+    )
+    comparison_df["regression_rmse_delta_vs_offline"] = (
+        comparison_df["regression_mean_rmse"] - float(offline_row["regression_mean_rmse"])
+    )
+    comparison_df["regression_r2_delta_vs_offline"] = (
+        comparison_df["regression_mean_r2"] - float(offline_row["regression_mean_r2"])
+    )
+    comparison_df["classification_macro_f1_delta_vs_offline"] = (
+        comparison_df["classification_mean_macro_f1"] - float(offline_row["classification_mean_macro_f1"])
+    )
+    comparison_df["classification_accuracy_delta_vs_offline"] = (
+        comparison_df["classification_mean_accuracy"] - float(offline_row["classification_mean_accuracy"])
+    )
+
+    comparison_df["classification_change_flag"] = np.where(
+        (
+            comparison_df["classification_macro_f1_delta_vs_offline"].abs() >= MEANINGFUL_CLASSIFICATION_DELTA
+        )
+        | (
+            comparison_df["classification_accuracy_delta_vs_offline"].abs() >= MEANINGFUL_CLASSIFICATION_DELTA
+        ),
+        f"meaningful_delta_ge_{MEANINGFUL_CLASSIFICATION_DELTA:.2f}",
+        f"small_delta_lt_{MEANINGFUL_CLASSIFICATION_DELTA:.2f}",
+    )
+
+    regression_activity_offline = offline_results["regression_by_activity"].copy()
+    regression_activity_onlineish = onlineish_results["regression_by_activity"].copy()
+
+    activity_delta_df = regression_activity_offline[
+        ["activity_target", "activity_label", "rows", "mae", "rmse", "r2"]
+    ].rename(
+        columns={
+            "rows": "offline_rows",
+            "mae": "offline_mae",
+            "rmse": "offline_rmse",
+            "r2": "offline_r2",
+        }
+    )
+    activity_delta_df = activity_delta_df.merge(
+        regression_activity_onlineish[["activity_target", "activity_label", "rows", "mae", "rmse", "r2"]].rename(
+            columns={
+                "rows": "onlineish_rows",
+                "mae": "onlineish_mae",
+                "rmse": "onlineish_rmse",
+                "r2": "onlineish_r2",
+            }
+        ),
+        on=["activity_target", "activity_label"],
+        how="inner",
+    )
+    activity_delta_df["mae_delta_onlineish_minus_offline"] = (
+        activity_delta_df["onlineish_mae"] - activity_delta_df["offline_mae"]
+    )
+    activity_delta_df["rmse_delta_onlineish_minus_offline"] = (
+        activity_delta_df["onlineish_rmse"] - activity_delta_df["offline_rmse"]
+    )
+    activity_delta_df["r2_delta_onlineish_minus_offline"] = (
+        activity_delta_df["onlineish_r2"] - activity_delta_df["offline_r2"]
+    )
+    activity_delta_df = activity_delta_df.sort_values(
+        "mae_delta_onlineish_minus_offline",
+        ascending=False,
+    ).reset_index(drop=True)
+
+    return comparison_df, activity_delta_df
+
+
+def _save_onlineish_comparison_plot(onlineish_comparison_df: pd.DataFrame, figures_dir: Path) -> None:
+    plot_df = onlineish_comparison_df.copy()
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+
+    sns.barplot(
+        data=plot_df,
+        x="evaluation_mode",
+        y="regression_mean_mae",
+        color="tab:red",
+        ax=axes[0],
+    )
+    axes[0].set_title("Regression MAE: offline vs online-ish")
+    axes[0].set_xlabel("evaluation mode")
+    axes[0].set_ylabel("mean MAE")
+    axes[0].tick_params(axis="x", rotation=15)
+
+    sns.barplot(
+        data=plot_df,
+        x="evaluation_mode",
+        y="classification_mean_macro_f1",
+        color="tab:blue",
+        ax=axes[1],
+    )
+    axes[1].set_title("Classification macro F1: offline vs online-ish")
+    axes[1].set_xlabel("evaluation mode")
+    axes[1].set_ylabel("mean macro F1")
+    axes[1].tick_params(axis="x", rotation=15)
+
+    fig.tight_layout()
+    fig.savefig(figures_dir / "grouped_cv_onlineish_comparison.png", dpi=140)
+    plt.close(fig)
 
 
 def _build_features_and_targets(per_second_df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[str]]:
@@ -630,11 +892,13 @@ def run_compact_ablation_study(
     prefill_df = _load_protocol_per_second_prefill(paths)
 
     fill_strategy_tables: dict[str, pd.DataFrame] = {}
+    filled_per_second_tables: dict[str, pd.DataFrame] = {}
     baseline_features: list[str] = []
     upgraded_features: list[str] = []
 
     for fill_strategy in FILL_STRATEGY_ORDER:
         filled_df = _apply_fill_strategy(prefill_df, fill_strategy)
+        filled_per_second_tables[fill_strategy] = filled_df
         table_df, baseline_cols, upgraded_cols = _build_features_and_targets(filled_df)
         fill_strategy_tables[fill_strategy] = table_df
 
@@ -781,48 +1045,42 @@ def run_compact_ablation_study(
     preferred_fill = preferred_setup["preferred_fill_strategy"]
     preferred_feature_set = preferred_setup["preferred_feature_set"]
     preferred_target_col = preferred_setup["preferred_target_col"]
+    preferred_setup_df["onlineish_evaluation_mode"] = ONLINEISH_EVALUATION_MODE
+    preferred_setup_df["onlineish_hr_delay_seconds"] = ONLINEISH_HR_DELAY_SECONDS
+    preferred_setup_df["onlineish_mode_reason"] = (
+        "Apply a fixed 5-second HR availability lag while keeping non-HR telemetry current."
+    )
 
     preferred_feature_cols = baseline_features if preferred_feature_set == "baseline" else upgraded_features
     preferred_table_raw = fill_strategy_tables[preferred_fill].copy()
-    preferred_table = preferred_table_raw.copy()
+    preferred_table = _prepare_output_columns(preferred_table_raw, preferred_feature_cols)
+    regression_table, classification_table = _build_task_tables(
+        model_table=preferred_table,
+        preferred_feature_cols=preferred_feature_cols,
+        preferred_target_col=preferred_target_col,
+    )
 
-    output_columns = [
-        "subject_id",
-        "session",
-        "timestamp_s",
-        "activity_id",
-        "activity_label",
-        "heart_rate_bpm",
-        "heart_rate_observed_flag",
-        "heart_rate_fill_strategy",
-        *preferred_feature_cols,
-        "hr_target_30s",
-        "hr_target_15s",
-        "hr_target_next30s_mean",
-        "activity_target",
-    ]
-    deduped_output_columns: list[str] = []
-    seen_columns: set[str] = set()
-    for column_name in output_columns:
-        if column_name in preferred_table.columns and column_name not in seen_columns:
-            deduped_output_columns.append(column_name)
-            seen_columns.add(column_name)
-    preferred_table = preferred_table[deduped_output_columns].copy()
+    preferred_filled_per_second = filled_per_second_tables[preferred_fill]
+    onlineish_input_df = _apply_hr_availability_delay(
+        filled_df=preferred_filled_per_second,
+        delay_seconds=ONLINEISH_HR_DELAY_SECONDS,
+    )
+    onlineish_table_raw, _, _ = _build_features_and_targets(onlineish_input_df)
 
-    duplicate_count = int(preferred_table.duplicated(subset=["subject_id", "timestamp_s"]).sum())
-    if duplicate_count > 0:
-        raise ValueError(f"Preferred table has duplicate subject-second rows: {duplicate_count}")
+    target_columns = ["hr_target_30s", "hr_target_15s", "hr_target_next30s_mean", "activity_target"]
+    target_lookup = preferred_table_raw.set_index(["subject_id", "timestamp_s"])[target_columns]
 
-    regression_required = [*preferred_feature_cols, preferred_target_col]
-    classification_required = [*preferred_feature_cols, "activity_target"]
+    onlineish_table_raw = onlineish_table_raw.set_index(["subject_id", "timestamp_s"])
+    for target_column in target_columns:
+        onlineish_table_raw[target_column] = target_lookup[target_column]
+    onlineish_table_raw = onlineish_table_raw.reset_index()
 
-    regression_table = preferred_table.dropna(subset=regression_required).reset_index(drop=True)
-    classification_table = preferred_table.dropna(subset=classification_required).reset_index(drop=True)
-
-    if regression_table.empty:
-        raise ValueError("Regression-ready table is empty after preferred setup filtering.")
-    if classification_table.empty:
-        raise ValueError("Classification-ready table is empty after preferred setup filtering.")
+    onlineish_table = _prepare_output_columns(onlineish_table_raw, preferred_feature_cols)
+    onlineish_regression_table, onlineish_classification_table = _build_task_tables(
+        model_table=onlineish_table,
+        preferred_feature_cols=preferred_feature_cols,
+        preferred_target_col=preferred_target_col,
+    )
 
     regression_table.to_parquet(processed_regression_path, index=False)
     classification_table.to_parquet(processed_classification_path, index=False)
@@ -839,6 +1097,8 @@ def run_compact_ablation_study(
                 "classification_row_gain_pct_vs_regression": float(
                     (len(classification_table) - len(regression_table)) / max(len(regression_table), 1)
                 ),
+                "onlineish_regression_rows": int(len(onlineish_regression_table)),
+                "onlineish_classification_rows": int(len(onlineish_classification_table)),
             }
         ]
     )
@@ -872,6 +1132,47 @@ def run_compact_ablation_study(
         regression_target_col=preferred_target_col,
     )
 
+    with tempfile.TemporaryDirectory(prefix="pamap2_onlineish_eval_") as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        tmp_metrics_dir = tmp_root / "metrics"
+        tmp_figures_dir = tmp_root / "figures"
+        tmp_models_dir = tmp_root / "models"
+        tmp_regression_path = tmp_root / "onlineish_model_table_regression.parquet"
+        tmp_classification_path = tmp_root / "onlineish_model_table_classification.parquet"
+
+        onlineish_regression_table.to_parquet(tmp_regression_path, index=False)
+        onlineish_classification_table.to_parquet(tmp_classification_path, index=False)
+
+        onlineish_results = run_grouped_evaluation(
+            regression_processed_path=tmp_regression_path,
+            classification_processed_path=tmp_classification_path,
+            metrics_dir=tmp_metrics_dir,
+            figures_dir=tmp_figures_dir,
+            models_dir=tmp_models_dir,
+            random_seed=random_seed,
+            alpha=alpha,
+            regression_target_col=preferred_target_col,
+        )
+
+    onlineish_comparison_df, onlineish_activity_delta_df = _build_onlineish_comparison_summary(
+        offline_results=grouped_results,
+        onlineish_results=onlineish_results,
+    )
+
+    onlineish_comparison_df.to_csv(
+        metrics_dir / "grouped_cv_onlineish_comparison_summary.csv",
+        index=False,
+    )
+    onlineish_activity_delta_df.to_csv(
+        metrics_dir / "grouped_cv_onlineish_regression_activity_delta.csv",
+        index=False,
+    )
+
+    _save_onlineish_comparison_plot(
+        onlineish_comparison_df=onlineish_comparison_df,
+        figures_dir=figures_dir,
+    )
+
     return {
         "feature_ablation": feature_ablation_df,
         "target_comparison": target_comparison_df,
@@ -882,6 +1183,10 @@ def run_compact_ablation_study(
         "preferred_fill_strategy": preferred_fill,
         "task_table_row_summary": task_table_summary_df,
         "grouped_results": grouped_results,
+        "onlineish_mode": ONLINEISH_EVALUATION_MODE,
+        "onlineish_hr_delay_seconds": ONLINEISH_HR_DELAY_SECONDS,
+        "onlineish_comparison": onlineish_comparison_df,
+        "onlineish_regression_activity_delta": onlineish_activity_delta_df,
     }
 
 

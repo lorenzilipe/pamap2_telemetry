@@ -143,6 +143,28 @@ Implemented sensitivity study (2026-04-12):
 - Adoption for preferred setup:
 	- keep `current_ffill` as the default due stable performance and simpler explanation.
 
+Implemented online-ish delayed-HR study (2026-04-17):
+- Added one lightweight online-ish evaluation mode: `onlineish_hr_delay_5s`.
+- Simulation rule:
+	- First apply the preferred fill strategy (`current_ffill`) within subject.
+	- Then shift HR availability by +5 seconds within subject before feature generation.
+	- Non-HR sensor signals stay at current time.
+- Causal-window guarantee:
+	- All HR-derived lag/rolling features are computed from delayed HR only.
+	- Regression targets remain the true future HR targets, so evaluation reflects prediction quality, not target delay artifacts.
+- Purpose:
+	- Measure sensitivity to offline convenience assumptions about instant HR access.
+	- Keep scope lean; do not build a streaming system.
+- Output artifacts:
+	- `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
+	- `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`
+	- `artifacts/figures/grouped_cv_onlineish_comparison.png`
+- Observed headline impact (preferred setup, current run):
+	- regression MAE increased by `+0.734` bpm
+	- regression RMSE increased by `+0.894` bpm
+	- regression R2 decreased by `-0.021`
+	- classification changes were small (`+0.002` macro F1, `+0.009` accuracy)
+
 ### Time handling
 - sort within subject by timestamp before any temporal operation
 - resample to 1-second intervals for the main telemetry table
@@ -292,6 +314,7 @@ Core update artifacts:
 - `artifacts/metrics/grouped_cv_target_comparison_summary.csv`
 - `artifacts/metrics/grouped_cv_fill_sensitivity_summary.csv`
 - `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`
+- `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
 
 ---
 

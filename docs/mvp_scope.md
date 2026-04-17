@@ -101,6 +101,15 @@ Default logic:
 
 If runtime becomes too heavy, use grouped K-fold while preserving full subject isolation.
 
+### Lightweight online-ish stress check
+Run one additional sensitivity mode to probe offline convenience dependence:
+- mode: `onlineish_hr_delay_5s`
+- rule: delay HR availability by 5 seconds before HR-derived feature generation
+- keep non-HR telemetry at current time
+- keep regression targets as true future HR targets
+
+This check is required to stay lightweight and should not expand into a streaming simulator.
+
 ### Metrics
 
 #### Regression

@@ -465,3 +465,30 @@ Classification predicts current activity and should use all rows valid for class
 - Grouped evaluation now reads both tables and evaluates each task on its own eligible rows under the same subject-grouped logic.
 - Added row-retention artifact: `artifacts/metrics/grouped_cv_task_table_row_summary.csv`.
 - Docs and schema contracts now explicitly describe why regression and classification diverge only at downstream row eligibility.
+
+---
+
+## 2026-04-17 Add one online-ish delayed-HR evaluation mode
+### Decision
+Add one explicit online-ish sensitivity mode, `onlineish_hr_delay_5s`, that delays heart-rate availability by 5 seconds before feature generation.
+
+### Why
+Offline evaluation can overestimate performance when heart-rate inputs are treated as instantly available. A fixed 5-second delay is a realistic and lightweight way to test whether selected models still work when HR is stale.
+
+### Alternatives rejected
+- Building a streaming/event-driven simulator in v1
+- Adding multiple delay and packet-loss variants in v1
+- Adding cloud or real-time infrastructure for this check
+
+### Consequences
+- The compact ablation workflow now runs both:
+	- `offline_standard`
+	- `onlineish_hr_delay_5s`
+- New comparison artifacts are written:
+	- `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
+	- `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`
+	- `artifacts/figures/grouped_cv_onlineish_comparison.png`
+- Headline result from current run:
+	- regression MAE increased by about `+0.734` bpm under delayed HR
+	- classification changes remained small in this mode
+- This remains a lightweight simulation only; it does not prove production streaming readiness.
