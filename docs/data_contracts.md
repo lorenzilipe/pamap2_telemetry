@@ -1,188 +1,146 @@
-# Data Contracts And Stage Schemas
+# data contracts and stage schemas
 
-This document defines explicit contracts for each pipeline stage in the MVP.
+This document defines stage contracts for the final MVP workflow.
 
 Scope is intentionally lean:
-- one shared telemetry pipeline,
-- one regression target,
-- one classification target,
-- one uncertainty layer.
+- one shared telemetry pipeline
+- one preferred regression target
+- one activity classification target
+- one uncertainty layer
 
-## Stage 1: Raw PAMAP2 Input
+## stage 1: raw protocol input
 
-Source:
+Source files:
 - `data/raw/pamap2+physical+activity+monitoring/PAMAP2_Dataset/Protocol/subject*.dat`
 
-Required columns:
-- `timestamp_s`: elapsed time in seconds.
-- `activity_id`: integer activity code from metadata mapping.
-- `heart_rate_bpm`: beats per minute.
-- `hand_acc_16g_x`, `hand_acc_16g_y`, `hand_acc_16g_z`: hand accelerometer axes.
-- `hand_gyro_x`, `hand_gyro_y`, `hand_gyro_z`: hand gyroscope axes.
-- `chest_acc_16g_x`, `chest_acc_16g_y`, `chest_acc_16g_z`: chest accelerometer axes.
-- `chest_gyro_x`, `chest_gyro_y`, `chest_gyro_z`: chest gyroscope axes.
-- `ankle_acc_16g_x`, `ankle_acc_16g_y`, `ankle_acc_16g_z`: ankle accelerometer axes.
-- `ankle_gyro_x`, `ankle_gyro_y`, `ankle_gyro_z`: ankle gyroscope axes.
+Required raw fields:
+- `timestamp_s`
+- `activity_id`
+- `heart_rate_bpm`
+- hand/chest/ankle accelerometer axes (`*_acc_16g_x|y|z`)
+- hand/chest/ankle gyroscope axes (`*_gyro_x|y|z`)
 
-Assumptions and validity rules:
-- Subject ID is parsed from filename (`subject101.dat` -> `subject_id=101`).
-- Rows are sorted by `timestamp_s` before temporal operations.
-- `activity_id=0` is treated as transient/unlabeled and excluded from supervised modeling.
-- Protocol files are the canonical MVP source to avoid Optional-session leakage.
+Validity rules:
+- subject ID parsed from filename
+- rows sorted by `timestamp_s` before temporal operations
+- `activity_id = 0` excluded from supervised modeling
+- no cross-subject filling
 
-Missingness handling:
-- Raw HR missingness is expected at high frequency.
-- No cross-subject filling is allowed.
-- Missingness audits are written to `artifacts/metrics/phase1_*`.
+## stage 2: 1-second telemetry table
 
-## Stage 2: 1-Second Telemetry Table
-
-Output:
+Output file:
 - `data/interim/pamap2_per_second.parquet`
 
 Required columns:
-- `subject_id`
-- `session`
-- `timestamp_s`
-- `activity_id`
-- `activity_label`
-- `heart_rate_bpm`
-- `heart_rate_observed_flag`
-- `hand_acc_16g_mag`, `chest_acc_16g_mag`, `ankle_acc_16g_mag`
-- `hand_gyro_mag`, `chest_gyro_mag`, `ankle_gyro_mag`
-- optional compact raw-axis summaries used by upgraded feature set:
+- identifiers: `subject_id`, `session`, `timestamp_s`, `activity_id`, `activity_label`
+- HR columns: `heart_rate_bpm`, `heart_rate_observed_flag`
+- magnitudes:
+  - `hand_acc_16g_mag`, `chest_acc_16g_mag`, `ankle_acc_16g_mag`
+  - `hand_gyro_mag`, `chest_gyro_mag`, `ankle_gyro_mag`
+- optional compact axis summaries:
   - `hand_acc_axis_absmean`, `chest_acc_axis_absmean`
 
-Assumptions and validity rules:
-- One row per `(subject_id, timestamp_s)`.
-- Only kept activity IDs are present (`1,2,3,4,5,6,7,12,13,16,17`).
-- Magnitude features are computed as `sqrt(x^2 + y^2 + z^2)`.
+Validity rules:
+- one row per `(subject_id, timestamp_s)`
+- allowed activity IDs: `1,2,3,4,5,6,7,12,13,16,17`
+- magnitude formula: `sqrt(x^2 + y^2 + z^2)`
 
-Missingness handling:
-- HR fill strategy is subject-local only.
-- Fill strategy names:
+HR handling rules:
+- subject-local fill only
+- supported fill strategy labels:
   - `current_ffill`
   - `limited_ffill_5s`
   - `strict_observed_only`
-- Online-ish evaluation mode (for sensitivity checks only):
-  - `onlineish_hr_delay_5s`
-  - This is not a fill strategy. It is an evaluation stress mode that delays HR availability by 5 seconds before feature generation.
 
-## Stage 3: Shared Feature/Target Generation (Upstream)
+## stage 3: shared upstream features and targets
 
-This stage stays shared across tasks and is built once per preferred setup.
+This stage is built once per preferred setup and reused by both tasks.
 
-Shared columns produced upstream:
+Shared upstream columns:
 - identifiers: `subject_id`, `session`, `timestamp_s`, `activity_id`, `activity_label`
-- fill metadata: `heart_rate_observed_flag`, `heart_rate_fill_strategy`
+- metadata: `heart_rate_observed_flag`, `heart_rate_fill_strategy`
 - targets: `activity_target`, `hr_target_30s`, `hr_target_15s`, `hr_target_next30s_mean`
-- selected feature set columns (baseline or upgraded)
+- selected feature columns from baseline/upgraded set
 
-Assumptions and validity rules:
-- Temporal features and targets are computed within subject only.
-- Data is sorted by `subject_id`, then `timestamp_s` before lags/rolling/shifts.
-- Upstream generation does not drop classification rows just because a future regression target is missing.
+Rules:
+- all temporal transforms are subject-local
+- data is sorted by `subject_id`, then `timestamp_s`
+- classification row eligibility is not tied to regression target availability
 
-## Stage 4: Task-Specific Model Tables
+## stage 4: task-specific processed tables
 
-### Stage 4a: Regression-ready table
+### stage 4a: regression-ready table
 
 Output:
 - `data/processed/pamap2_model_table_regression.parquet`
 
 Row eligibility:
-- row must have non-null selected feature columns,
-- row must have non-null selected regression target (`preferred_target_col`).
+- non-null selected feature columns
+- non-null selected regression target (`preferred_target_col`)
 
-Required identifier/target columns:
+Required columns:
 - `subject_id`, `timestamp_s`, `activity_id`, `activity_label`
 - `activity_target`
-- selected regression target column (`preferred_target_col`)
+- selected regression target column
 
-### Stage 4b: Classification-ready table
+### stage 4b: classification-ready table
 
 Output:
 - `data/processed/pamap2_model_table_classification.parquet`
 
 Row eligibility:
-- row must have non-null selected feature columns,
-- row must have non-null `activity_target`.
+- non-null selected feature columns
+- non-null `activity_target`
 
-Required identifier/target columns:
+Required columns:
 - `subject_id`, `timestamp_s`, `activity_id`, `activity_label`
 - `activity_target`
 
-Design reason for divergence:
-- classification predicts current activity state,
-- regression predicts future heart-rate targets,
-- therefore classification row eligibility must not depend on future-target availability.
+Design rule:
+- regression and classification share upstream features but diverge at downstream row filtering.
 
-Missingness handling (both task tables):
-- Missingness is handled in two layers:
-  - row filtering for required training columns,
-  - in-pipeline median imputation in sklearn Pipelines for model robustness.
+## stage 5: evaluation and prediction outputs
 
-## Stage 5: Model Output Contracts
+Primary metric outputs:
+- `artifacts/metrics/grouped_cv_regression_fold_metrics.csv`
+- `artifacts/metrics/grouped_cv_classification_fold_metrics.csv`
+- `artifacts/metrics/grouped_cv_selected_model_summary.csv`
+- `artifacts/metrics/grouped_cv_regression_summary.csv`
+- `artifacts/metrics/grouped_cv_classification_summary.csv`
 
-Primary output files:
-- grouped regression fold metrics:
-  - `artifacts/metrics/grouped_cv_regression_fold_metrics.csv`
-- grouped classification fold metrics:
-  - `artifacts/metrics/grouped_cv_classification_fold_metrics.csv`
-- selected model summary:
-  - `artifacts/metrics/grouped_cv_selected_model_summary.csv`
-- conformal summaries:
-  - `artifacts/metrics/grouped_cv_conformal_summary.csv`
-  - `artifacts/metrics/grouped_cv_conformal_summary_all_variants.csv`
-- classification confidence summaries:
-  - `artifacts/metrics/grouped_cv_classification_calibration_summary.csv`
-  - `artifacts/metrics/grouped_cv_classification_abstention_summary.csv`
-- prediction-level outputs:
-  - `artifacts/metrics/grouped_cv_regression_predictions_all_models.csv`
-  - `artifacts/metrics/grouped_cv_classification_predictions_all_models.csv`
-  - `artifacts/metrics/grouped_cv_conformal_predictions.csv`
-- online-ish stress-test outputs:
-  - `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
-  - `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`
+Uncertainty outputs:
+- `artifacts/metrics/grouped_cv_conformal_summary.csv`
+- `artifacts/metrics/grouped_cv_conformal_summary_all_variants.csv`
+- `artifacts/metrics/grouped_cv_conformal_predictions.csv`
 
-Online-ish comparison contract:
-- `grouped_cv_onlineish_comparison_summary.csv` contains one row per evaluation mode.
-- required mode values:
-  - `offline_standard`
-  - `onlineish_hr_delay_5s`
-- required delayed-HR metadata:
-  - `hr_delay_seconds`
-- required compact comparison metrics:
-  - regression: `regression_mean_mae`, `regression_mean_rmse`, `regression_mean_r2`
-  - classification: `classification_mean_macro_f1`, `classification_mean_accuracy`
-  - deltas: metric deltas versus offline baseline
+Confidence outputs:
+- `artifacts/metrics/grouped_cv_classification_calibration_summary.csv`
+- `artifacts/metrics/grouped_cv_classification_reliability_by_bin.csv`
+- `artifacts/metrics/grouped_cv_classification_abstention_summary.csv`
 
-Grouped evaluation target contract:
-- `scripts/grouped_evaluation.py` reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`.
-- The `preferred_target_col` from that file is the default regression target for grouped evaluation reruns.
-- Grouped evaluation reads separate task tables:
-  - `data/processed/pamap2_model_table_regression.parquet`
-  - `data/processed/pamap2_model_table_classification.parquet`
-- If the preferred setup artifact is missing or inconsistent, grouped evaluation should fail explicitly.
+Online-ish sensitivity outputs:
+- `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
+- `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`
 
-Prediction output requirements:
-- regression predictions include `y_true`, `y_pred`, `subject_id`, `timestamp_s`.
-- classification predictions include `y_true`, `y_pred`, confidence scores, and per-class probabilities.
-- conformal predictions include `lower`, `upper`, `covered`, and `interval_width`.
+Prediction-level requirements:
+- regression predictions: `y_true`, `y_pred`, `subject_id`, `timestamp_s`
+- classification predictions: `y_true`, `y_pred`, confidence, per-class probabilities
+- conformal predictions: `lower`, `upper`, `covered`, `interval_width`
 
-Experiment record files:
+## preferred target contract for grouped reruns
+
+- grouped evaluation reads `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`
+- `preferred_target_col` from that file is required and used as regression target
+- if missing or inconsistent, grouped evaluation must fail explicitly
+
+## model record contract
+
+Canonical tracked records:
 - `docs/model_records/regression_selected_model_record.json`
 - `docs/model_records/classification_selected_model_record.json`
 
-Runtime copies are also written to `artifacts/models/metadata/` for local runs.
+Runtime copies may also be written under `artifacts/models/metadata/`.
 
-These records provide task, target, split strategy, metrics summary, and uncertainty notes for selected models.
-
-Record content contract:
-- Regression record:
-  - regression metrics (MAE, RMSE, R2 summary fields)
-  - regression uncertainty details from conformal diagnostics (coverage and interval width)
-- Classification record:
-  - classification metrics (accuracy and macro F1 summary fields)
-  - classification calibration and confidence diagnostics (ECE, multiclass Brier score, confidence or abstention notes)
-  - no regression-only conformal interval metrics
+Required content:
+- regression record: selected regression metrics plus conformal coverage and interval width
+- classification record: selected classification metrics plus calibration/confidence diagnostics

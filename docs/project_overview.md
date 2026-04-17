@@ -1,121 +1,54 @@
-# Project overview
+# project overview
 
-## Project name
+## purpose
 
-PAMAP2 Wearable Telemetry MVP
+This project is a compact wearable telemetry pipeline built on PAMAP2.
 
-## Purpose
+It was designed to show end-to-end applied ML work that is:
+- technically honest
+- easy to explain
+- realistic about generalization limits
 
-This project is a lean, notebook-first portfolio project built to demonstrate strong applied data science skills on wearable sensor data. The project should signal that I can work with multivariate telemetry, build a clean data pipeline, formulate sensible prediction tasks, evaluate models carefully, and communicate practical conclusions.
+## core question
 
-The portfolio goal is not just to show that I can train a model. The goal is to show that I can take raw wearable data and turn it into a compact, defensible end-to-end workflow that looks like real data science work.
+Given recent wearable history, can we:
+1. forecast near-future heart rate,
+2. classify current activity,
+3. quantify uncertainty in the forecast?
 
-## Why this project exists
+## what was built
 
-I want a project that strongly supports applications for data science roles that value:
+- Protocol-only PAMAP2 ingest and audit
+- 1-second subject-level telemetry table
+- subject-local lagged and rolling features
+- grouped leave-one-subject-out evaluation
+- split conformal regression intervals
+- confidence diagnostics for classification
 
-- time-series forecasting
-- telemetry or sensor analytics
-- practical machine learning
-- clean data preprocessing
-- robust evaluation
-- light uncertainty estimation
-- clear communication of results
+## modeling choices
 
-This project is meant to add a stronger wearable and telemetry signal than a generic notebook analysis would.
+The model set is intentionally small:
+- regression: persistence, linear regression, hist gradient boosting
+- classification: logistic regression, random forest
 
-## Why PAMAP2
+Reason: this repo prioritizes clean methodology and evidence over model breadth.
 
-PAMAP2 is a good fit because it supports a clean wearable telemetry story. It contains multivariate sensor streams and activity labels, which lets one shared dataset pipeline support both regression and classification. It also naturally supports short-horizon forecasting tasks where recent sensor history is used to predict a near-future physiological signal.
+## evaluation standard
 
-## What this MVP is trying to prove
+All model comparisons use subject-grouped cross-validation.
 
-This MVP should show that I can:
+This avoids optimistic random-row splits and keeps the main claim tied to cross-subject behavior.
 
-1. ingest and audit raw wearable sensor data,
-2. turn raw signals into a usable telemetry table,
-3. engineer time-aware features without leakage,
-4. build forecasting and classification models,
-5. add a simple uncertainty layer,
-6. evaluate results under subject-grouped cross-validation,
-7. present conclusions clearly and honestly.
+## final claim this project supports
 
-## High-level project story
+A lean telemetry pipeline can produce useful short-horizon forecasting and activity classification results under grouped evaluation, with uncertainty diagnostics that reveal where performance is stable and where it is fragile.
 
-The project uses PAMAP2 to build a shared 1-second telemetry table across subjects. From that table, it creates lagged and rolling features from recent sensor history. Those features are then used for three related tasks:
+## boundaries
 
-- forecast heart rate 30 seconds ahead,
-- classify current activity state,
-- generate prediction intervals for the heart-rate forecast.
+Out of scope in this repo:
+- deployment infrastructure
+- streaming system implementation
+- online learning
+- large model zoo or deep learning
 
-This keeps the project coherent. Instead of looking like three unrelated notebook exercises, it looks like one compact telemetry pipeline that supports multiple model outputs.
-
-## Architecture at a glance
-
-### Stage 1: ingest and audit
-- load raw subject files
-- inspect columns, missingness, activity labels, and subject coverage
-- choose the subset of activities to keep in the MVP
-
-### Stage 2: build telemetry table
-- compute compact sensor summary features
-- resample to a 1-second table
-- clean missing values using simple documented rules
-
-### Stage 3: feature engineering
-- create lags and rolling-window summaries
-- define future heart-rate target
-- define current activity target
-
-### Stage 4: modeling and evaluation
-- evaluate with leave-one-subject-out grouped folds
-- compare a compact model set per task
-- select final models from grouped fold summaries
-- report performance by subject and activity
-- add grouped split conformal intervals for regression
-
-### Stage 5: reporting
-- save metrics
-- save plots
-- write concise conclusions and limitations
-
-## What is out of scope for v1
-
-The following are explicitly out of scope unless I later decide to add them:
-
-- web app
-- API
-- cloud deployment
-- streaming infrastructure
-- deep learning
-- large-scale distributed processing
-- experiment tracking platforms
-- automated retraining
-- online inference
-- production monitoring systems
-
-The MVP should be small, clean, and interview-defensible.
-
-## Success criteria
-
-This project is successful if it produces:
-
-- one shared upstream telemetry pipeline and task-specific downstream modeling tables
-- one subject-grouped evaluation workflow
-- one honest regression result
-- one honest classification result
-- one uncertainty result with empirical coverage
-- one notebook story that is easy to explain in an interview
-
-## Resume framing target
-
-The eventual resume framing should emphasize:
-
-- wearable telemetry pipeline
-- multivariate time-series feature engineering
-- short-horizon forecasting
-- activity-state classification
-- subject-grouped evaluation
-- lightweight uncertainty estimation
-
-The resume framing should not overstate this as a production system, deployed platform, or finished product.
+These are deliberate scope choices, not missing implementation work.

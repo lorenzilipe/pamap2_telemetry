@@ -1,494 +1,115 @@
-# Decision log
+# decision log
 
-This file records project decisions so that future work sessions stay consistent.
+This file records the decisions that define the current project state.
 
-Use this format for new entries:
+## 2026-04-07 dataset and project shape
 
-## [date] Decision title
-### Decision
-### Why
-### Alternatives rejected
-### Consequences
+### decision
+Use PAMAP2 as the core dataset and keep the project notebook-first and local-only.
 
----
+### why
+It supports a clear wearable telemetry story without infrastructure overhead.
 
-## 2026-04-07 Dataset choice
-### Decision
-Use PAMAP2 as the primary dataset for the wearable telemetry MVP.
+### consequences
+The repository focuses on data pipeline quality, grouped evaluation, and clear evidence artifacts.
 
-### Why
-It best supports a Garmin-adjacent story around wearable sensor analytics, time-series forecasting, and activity-state classification while staying manageable for a lean notebook-first project.
+## 2026-04-07 task set
 
-### Alternatives rejected
-- WESAD: strong physiology and stress angle, but less directly aligned with the desired wearable fitness telemetry framing for this MVP
-- C-MAPSS: good telemetry dataset, but industrial rather than wearable
+### decision
+Use one shared telemetry pipeline to support:
+1. heart-rate forecasting,
+2. current activity classification,
+3. regression uncertainty intervals.
 
-### Consequences
-The project should foreground wearable telemetry, sensor features, heart-rate forecasting, and activity classification.
+### why
+This keeps the project coherent instead of splitting it into unrelated analyses.
 
----
+### consequences
+Feature engineering and evaluation must serve both regression and classification.
 
-## 2026-04-07 MVP scope choice
-### Decision
-Build an ultra-lean, notebook-only MVP.
+## 2026-04-07 protocol-first ingest and activity subset
 
-### Why
-The immediate goal is to create a strong, defensible portfolio project quickly without getting trapped in infrastructure work.
+### decision
+Use Protocol sessions as the canonical source and keep activity IDs:
+`1,2,3,4,5,6,7,12,13,16,17`.
 
-### Alternatives rejected
-- API-first build
-- dashboard-first build
-- production-style deployment
-- cloud architecture
+### why
+Protocol data is the most consistent source across subjects, and the kept activities have stronger support.
 
-### Consequences
-The project should focus on data ingestion, feature engineering, modeling, uncertainty estimation, and clear evaluation.
+### consequences
+Rows with `activity_id = 0` are excluded from supervised tasks.
 
----
+## 2026-04-12 grouped evaluation baseline
 
-## 2026-04-07 Primary modeling tasks
-### Decision
-Use one shared dataset pipeline to support:
-1. heart-rate forecasting 30 seconds ahead,
-2. current activity-state classification,
-3. lightweight regression prediction intervals.
+### decision
+Use leave-one-subject-out grouped cross-validation as the default evaluation strategy.
 
-### Why
-This creates one coherent telemetry project instead of multiple disconnected analyses.
+### why
+Single held-out-subject selection was too fragile and less defensible.
 
-### Alternatives rejected
-- regression only
-- classification only
-- anomaly detection as the main task
-- future activity-transition prediction as the main classification target
+### alternatives rejected
+- random row-level splits
+- one fixed validation subject for model choice
 
-### Consequences
-The feature pipeline must support both regression and classification while remaining compact and interpretable.
+### consequences
+Model ranking and uncertainty diagnostics are based on grouped folds.
 
----
+## 2026-04-12 compact ablation and preferred setup
 
-## 2026-04-07 Evaluation choice
-### Decision
-Use subject-held-out splits as the default evaluation design.
+### decision
+Run compact ablations for feature set, target definition, and HR fill strategy, then select one preferred setup.
 
-### Why
-This is more realistic and more interview-defensible than random row-level splitting.
+### why
+These choices materially affect realism and error levels, and needed explicit evidence.
 
-### Alternatives rejected
-- random train/test row split
-- purely time-based split across pooled subjects without subject separation
+### consequences
+Current preferred setup:
+- feature set: `upgraded`
+- fill strategy: `current_ffill`
+- regression target: `hr_target_next30s_mean`
 
-### Consequences
-All feature engineering and target generation must be done in a way that respects subject boundaries.
+## 2026-04-13 package boundary and contracts
 
----
+### decision
+Move reusable logic into `src/pamap2_telemetry/` and keep notebooks/scripts as orchestration.
 
-## 2026-04-07 Modeling complexity guardrail
-### Decision
-Do not use deep learning or broad Dask integration in v1 unless there is a clear and specific reason.
+### why
+This improves rerun consistency while preserving notebook readability.
 
-### Why
-The highest-ROI MVP is a clean, readable, well-evaluated sklearn-based pipeline.
+### consequences
+Data contracts and selected-model records were added as explicit project artifacts.
 
-### Alternatives rejected
-- deep neural sequence models
-- full distributed-computing redesign
-- large hyperparameter sweeps
+## 2026-04-14 preferred-target rerun consistency
 
-### Consequences
-The project should prioritize speed, clarity, and correctness over technical maximalism.
+### decision
+Make grouped evaluation read `preferred_target_col` from preferred setup artifacts, and fail fast when missing or inconsistent.
 
----
+### why
+Hardcoded fallback targets can silently drift from ablation conclusions.
 
-## 2026-04-07 Collaboration style
-### Decision
-Work in small, scoped tasks with explicit planning before implementation.
+### consequences
+Standalone reruns and notebook reruns stay aligned to the same regression target.
 
-### Why
-This reduces scope drift and makes it easier to keep the project clean and explainable.
+## 2026-04-17 task-specific downstream tables
 
-### Alternatives rejected
-- giant open-ended coding sessions
-- mixing planning, implementation, and interpretation all at once
+### decision
+Keep one shared upstream feature build, but split downstream processed tables into regression-ready and classification-ready tables.
 
-### Consequences
-Each work session should focus on one phase or one subtask at a time.
+### why
+Classification should not lose valid rows because regression targets are unavailable.
 
----
+### consequences
+Grouped evaluation now reads:
+- `data/processed/pamap2_model_table_regression.parquet`
+- `data/processed/pamap2_model_table_classification.parquet`
 
-## 2026-04-07 Raw package restructuring approach
-### Decision
-Keep the original PAMAP2 raw files immutable and add a tidy metadata/documentation layer inside `data/raw/pamap2+physical+activity+monitoring/`.
+## 2026-04-17 online-ish delayed-HR sensitivity check
 
-### Why
-This preserves provenance while making ingestion and auditing easier to reproduce. The metadata layer captures schema, labels, subject metadata, file manifests, and a concise documentation digest from raw PDFs.
+### decision
+Add one lightweight stress mode, `onlineish_hr_delay_5s`, that delays HR availability before HR-derived feature generation.
 
-### Alternatives rejected
-- Physically renaming or moving raw source files in v1
-- Leaving raw docs only as PDFs without machine-readable extraction
+### why
+Offline assumptions about immediate HR access can inflate regression performance.
 
-### Consequences
-Phase 1 now has a neater structure without breaking source integrity. Notebook code continues reading the original dataset paths while docs and manifests provide cleaner references.
-
----
-
-## 2026-04-07 Phase 1 ingest scope and activity subset
-### Decision
-Use Protocol sessions as the primary Phase 1 ingest/audit scope, keep Optional sessions as supplemental inventory only, and retain activity IDs `1,2,3,4,5,6,7,12,13,16,17` for the MVP.
-
-### Why
-Protocol is the canonical shared collection across subjects and avoids mixing supplemental sessions that overlap the same people. The kept activity set was chosen with transparent thresholds (at least 6 subjects and at least 90,000 rows) to keep high-support classes.
-
-### Alternatives rejected
-- Merging Protocol and Optional sessions in primary audit metrics
-- Keeping all labeled classes including low-support classes (for example rope jumping)
-
-### Consequences
-The interim Phase 1 table is cleaner and more stable for v1 modeling. Leakage risk from Protocol/Optional overlap is reduced, and class support is better balanced for classification.
-
----
-
-## 2026-04-07 Subject 109 split handling
-### Decision
-Exclude subject 109 from the default train/validation/test split due very low protocol coverage.
-
-### Why
-Subject 109 contains far fewer rows than other protocol subjects, which can destabilize evaluation and split balance if treated as a standard held-out subject.
-
-### Alternatives rejected
-- Keeping subject 109 as a standard test subject
-- Dropping subject 109 from raw audit entirely
-
-### Consequences
-Default split guidance is now train `101-106`, validation `107`, test `108`, with subject `109` preserved for optional sensitivity checks.
-
----
-
-## 2026-04-08 Phase 1 audit closeout and strict Phase 2 verification
-### Decision
-Close remaining Phase 1 audit gaps in notebook 01 and mark strict recipe Phase 2 as complete only after explicit validation checks pass on the regenerated interim table.
-
-### Why
-The project already had working Phase 2 logic in notebook 01, but audit completeness and completion evidence were uneven. Adding missingness and summary artifacts plus time-series audit plots improves traceability and interview defensibility. Explicit Phase 2 checks reduce ambiguity before moving to Phase 3.
-
-### Alternatives rejected
-- Treating Phase 1 as complete without adding missing audit artifacts
-- Advancing directly into Phase 3 while Phase 2 completion evidence remained implicit
-- Refactoring Phase 2 code into notebook 02 before first finishing strict completion checks
-
-### Consequences
-- New audit artifacts were added:
-	- `artifacts/metrics/phase1_protocol_column_missingness.csv`
-	- `artifacts/metrics/phase1_protocol_hr_summary_stats.csv`
-	- `artifacts/figures/phase1_protocol_hr_timeseries_subject104.png`
-	- `artifacts/figures/phase1_protocol_hand_acc_timeseries_subject104.png`
-- Strict Phase 2 validation artifacts were added:
-	- `artifacts/metrics/phase2_strict_validation_checks.csv`
-	- `artifacts/metrics/phase2_interim_hr_missingness_by_subject.csv`
-- Phase 2 is now explicitly verified as complete with schema, uniqueness, sort-order, activity-set, and post-fill heart-rate checks.
-
----
-
-## 2026-04-08 Phase 3 feature pipeline completion
-### Decision
-Complete Phase 3 as a strict feature-engineering step using the compact magnitude-based signal set only, and generate the final supervised table at `data/processed/pamap2_model_table.parquet` plus Phase 3 validation artifacts.
-
-### Why
-This matches the MVP build recipe and keeps scope focused: create past-only lagged and rolling features, define `hr_target_30s` and `activity_target`, and avoid drifting early into modeling or expanded feature families. The compact set is easier to explain and already aligned with the project's interview-defensible story.
-
-### Alternatives rejected
-- Adding temperature features in Phase 3 by default
-- Expanding to axis-level feature sets before baseline Phase 4/5 evaluation
-- Starting Phase 4 EDA in the same implementation pass
-- Switching the regression target to a next-30s average before testing the direct shift target
-
-### Consequences
-- Phase 3 notebook implementation added in `notebooks/02_feature_pipeline.ipynb`.
-- Final modeling table generated with 18,627 rows and 63 columns.
-- Per-subject row loss from windowing plus future shift is 39 rows each (8 subjects, 312 total).
-- Phase 3 artifacts added:
-	- `artifacts/metrics/phase3_row_retention_by_subject.csv`
-	- `artifacts/metrics/phase3_feature_missingness_post_clean.csv`
-	- `artifacts/metrics/phase3_target_summary.csv`
-- `docs/dataset_pamap2.md` now records implemented (not just planned) Phase 3 feature and target definitions.
-
----
-
-## 2026-04-08 Cross-platform environment workflow
-### Decision
-Use machine-local Python environments and a shared kernel name (`Python (pamap2-telemetry)`) across Windows and macOS, with setup scripts per operating system.
-
-### Why
-Virtual environments are not portable across operating systems. Syncing a macOS `.venv` into Windows caused kernel startup failures. A local-per-machine environment keeps notebook execution stable while preserving one shared codebase.
-
-### Alternatives rejected
-- Sharing one `.venv` folder across macOS and Windows through cloud sync
-- Keeping OS-specific interpreter paths in repository settings
-
-### Consequences
-- Added setup scripts:
-	- `scripts/setup_windows.ps1`
-	- `scripts/setup_mac.sh`
-- Added transition instructions in `README.md`.
-- Added `.venv_mac/` and `.venv_win/` to `.gitignore`.
-
----
-
-## 2026-04-08 Phase 4 to Phase 8 implementation complete
-### Decision
-Complete Phases 4-8 in notebook 03 with subject-held-out evaluation, baseline and stronger models, and split conformal intervals.
-
-### Why
-This closes the core MVP modeling scope while staying lean, transparent, and interview-defensible. The workflow now includes EDA evidence, fixed splits, baseline comparisons, stronger model checks, and calibrated uncertainty.
-
-### Alternatives rejected
-- Skipping baseline models and moving directly to stronger models
-- Changing the split strategy midstream
-- Using complex uncertainty methods beyond split conformal for v1
-
-### Consequences
-- Notebook implementation completed in `notebooks/03_modeling_and_uncertainty.ipynb`.
-- New metrics artifacts added:
-	- `artifacts/metrics/phase4_target_difficulty_checks.csv`
-	- `artifacts/metrics/phase5_split_summary.csv`
-	- `artifacts/metrics/phase6_baseline_metrics.csv`
-	- `artifacts/metrics/phase7_regression_tuning_results.csv`
-	- `artifacts/metrics/phase7_classification_tuning_results.csv`
-	- `artifacts/metrics/phase7_stronger_model_metrics.csv`
-	- `artifacts/metrics/phase6_7_all_model_metrics.csv`
-	- `artifacts/metrics/phase7_final_model_selection.csv`
-	- `artifacts/metrics/phase8_conformal_summary.csv`
-	- `artifacts/metrics/phase8_conformal_by_activity.csv`
-	- `artifacts/metrics/phase8_conformal_test_predictions.csv`
-- New figure artifacts added:
-	- `artifacts/figures/phase4_regression_heart_rate_distribution.png`
-	- `artifacts/figures/phase4_regression_hr_by_activity_boxplot.png`
-	- `artifacts/figures/phase4_regression_subject_timeseries.png`
-	- `artifacts/figures/phase4_regression_top_feature_corr_heatmap.png`
-	- `artifacts/figures/phase4_class_balance.png`
-	- `artifacts/figures/phase4_sensor_trace_by_activity.png`
-	- `artifacts/figures/phase4_motion_distribution_by_activity.png`
-	- `artifacts/figures/phase7_confusion_matrix_test.png`
-	- `artifacts/figures/phase8_interval_example_test.png`
-	- `artifacts/figures/phase8_coverage_by_activity.png`
-- Saved final trainable models in `artifacts/models/`:
-	- `phase7_final_regression_model.joblib`
-	- `phase7_final_classification_model.joblib`
-
----
-
-## 2026-04-12 Grouped evaluation rebuild
-### Decision
-Replace the narrow single validation/test subject selection workflow in notebook 03 with leave-one-subject-out grouped cross-validation for both regression and classification model selection, then keep split conformal uncertainty under grouped subject isolation.
-
-### Why
-The previous one-validation-subject selection logic was fragile and hard to defend in interviews. Grouped LOSO gives a clearer answer for cross-subject generalization and makes model ranking less sensitive to one person.
-
-### Alternatives rejected
-- Keep one fixed train/validation/test subject split for model selection
-- Expand to a large benchmark model zoo
-- Add complex nested tuning loops in v1
-
-### Consequences
-- Added grouped evaluation helper module: `scripts/grouped_evaluation.py`
-- Refactored modeling notebook: `notebooks/03_modeling_and_uncertainty.ipynb`
-- New grouped metrics artifacts:
-	- `artifacts/metrics/grouped_cv_regression_fold_metrics.csv`
-	- `artifacts/metrics/grouped_cv_regression_summary.csv`
-	- `artifacts/metrics/grouped_cv_classification_fold_metrics.csv`
-	- `artifacts/metrics/grouped_cv_classification_summary.csv`
-	- `artifacts/metrics/grouped_cv_selected_model_summary.csv`
-- New breakdown artifacts:
-	- `artifacts/metrics/grouped_cv_regression_selected_by_subject.csv`
-	- `artifacts/metrics/grouped_cv_regression_selected_by_activity.csv`
-	- `artifacts/metrics/grouped_cv_classification_selected_by_subject.csv`
-	- `artifacts/metrics/grouped_cv_classification_selected_by_activity.csv`
-	- `artifacts/metrics/grouped_cv_classification_selected_per_class.csv`
-- New grouped conformal artifacts:
-	- `artifacts/metrics/grouped_cv_conformal_fold_summary.csv`
-	- `artifacts/metrics/grouped_cv_conformal_summary.csv`
-	- `artifacts/metrics/grouped_cv_conformal_by_subject.csv`
-	- `artifacts/metrics/grouped_cv_conformal_by_activity.csv`
-- Current grouped-CV selections:
-	- regression: `hist_gradient_boosting`
-	- classification: `random_forest`
-
----
-
-## 2026-04-12 Compact feature/target/fill ablation upgrade
-### Decision
-Add a compact ablation workflow that compares:
-1. baseline vs upgraded feature set,
-2. direct `t+30s` vs alternative regression targets,
-3. current HR fill policy vs stricter alternatives,
-then rebuild the final processed table and grouped evaluation outputs from the preferred setup.
-
-### Why
-The project needed clearer evidence for three interview-critical questions:
-- do smarter but still small features help,
-- does target formulation materially change performance,
-- are results fragile to HR fill assumptions.
-
-The previous pipeline answered these only partially.
-
-### Alternatives rejected
-- Large feature explosion across many extra windows and raw axes
-- Deep learning sequence models
-- Full factorial ablation across all combinations
-- Complex HR imputation beyond local forward-fill variants
-
-### Consequences
-- Added compact ablation script: `scripts/compact_ablation_study.py`
-- Updated grouped evaluation code to support explicit regression target selection and safer feature-column filtering.
-- Added targeted upgraded features (19 extra columns) and explicit target columns:
-	- `hr_target_30s`
-	- `hr_target_15s`
-	- `hr_target_next30s_mean`
-- Added fill-policy sensitivity outputs:
-	- `current_ffill`
-	- `limited_ffill_5s`
-	- `strict_observed_only`
-- New ablation artifacts:
-	- `artifacts/metrics/grouped_cv_feature_ablation_summary.csv`
-	- `artifacts/metrics/grouped_cv_target_comparison_summary.csv`
-	- `artifacts/metrics/grouped_cv_fill_sensitivity_summary.csv`
-	- `artifacts/metrics/grouped_cv_preferred_setup_summary.csv`
-	- `artifacts/metrics/grouped_cv_final_feature_summary.csv`
-	- `artifacts/figures/grouped_cv_feature_ablation_mae.png`
-	- `artifacts/figures/grouped_cv_target_comparison_mae.png`
-	- `artifacts/figures/grouped_cv_fill_sensitivity_mae.png`
-- Preferred setup selected by compact ablation:
-	- feature set: `upgraded`
-	- fill strategy: `current_ffill`
-	- regression target: `hr_target_next30s_mean`
-- Grouped model selections under preferred setup:
-	- regression: `hist_gradient_boosting`
-	- classification: `logistic_regression`
-
----
-
-## 2026-04-13 Uncertainty diagnostics and confidence-aware classification
-### Decision
-Keep split conformal as the default uncertainty method, but expand evaluation to include:
-1. by-activity and by-subject coverage and interval width,
-2. global vs activity-conditioned conformal comparison,
-3. residual and interval-failure diagnostics,
-4. explicit operating-envelope reporting.
-
-Also treat classification outputs as confidence-bearing decisions by adding calibration and abstention analysis.
-
-### Why
-One overall coverage number was not enough to explain where the telemetry system is trustworthy. The project needed practical diagnostics that show where calibration breaks, where large errors cluster, and how to communicate confidence limits honestly.
-
-### Alternatives rejected
-- keep only global conformal with one headline coverage value
-- add heavier uncertainty methods (ensembles, Bayesian, deep methods) in v1
-- keep classification evaluation only at hard-label accuracy/macro-F1 level
-
-### Consequences
-- Conformal outputs now include global and activity-conditioned variant comparison with explicit width/coverage tradeoff reasoning.
-- New uncertainty diagnostics are exported:
-	- `grouped_cv_uncertainty_failure_by_activity.csv`
-	- `grouped_cv_uncertainty_failure_by_subject.csv`
-	- `grouped_cv_regression_residual_summary.csv`
-	- `grouped_cv_uncertainty_operating_envelope_by_activity.csv`
-- New confidence diagnostics are exported:
-	- `grouped_cv_classification_calibration_summary.csv`
-	- `grouped_cv_classification_reliability_by_bin.csv`
-	- `grouped_cv_classification_abstention_summary.csv`
-- New figures were added for residual distribution, reliability, and abstention tradeoffs.
-- The README and notebook now include explicit limitations and operating-envelope framing.
-
----
-
-## 2026-04-13 Lean src package and contract refactor
-### Decision
-Refactor reusable non-EDA logic into a small `src/pamap2_telemetry/` package and keep notebooks as thin orchestrators/reporting layers. Add explicit stage contracts and lightweight selected-model experiment records.
-
-### Why
-The notebook-first workflow remains valuable for narrative and interpretation, but reusable logic needed clearer boundaries for reproducibility, inference consistency, and easier reruns.
-
-### Alternatives rejected
-- Keep core reusable logic only in notebooks.
-- Keep logic only in large scripts without a package boundary.
-- Introduce heavier MLOps or service infrastructure in v1.
-
-### Consequences
-- Added package modules: `ingest`, `features`, `splits`, `train`, `evaluate`, `uncertainty`, plus compact ablation and experiment-record helpers.
-- Updated scripts to thin wrappers that call the package.
-- Updated notebooks 02 and 03 to import from `src/` modules.
-- Added explicit data contracts in `docs/data_contracts.md` and `docs/schemas/*.json`.
-- Added selected-model experiment records in `artifacts/models/metadata/`.
-- Ensured train/inference preprocessing consistency by using sklearn Pipelines with explicit imputation and scaling where needed.
-
----
-
-## 2026-04-14 Preferred-target rerun consistency and model-record correction
-### Decision
-Make grouped reruns read the preferred setup artifact for regression target selection, and make experiment records task-specific:
-1. regression record keeps regression metrics plus conformal uncertainty details,
-2. classification record uses classification metrics plus confidence and calibration diagnostics.
-
-### Why
-The standalone grouped rerun flow could drift from the preferred regression target if it used a default target value. Also, classification records incorrectly inherited regression conformal interval notes, which made records inconsistent with task intent.
-
-### Alternatives rejected
-- Keep a hardcoded grouped evaluation target in standalone reruns.
-- Keep one shared uncertainty section for both regression and classification records.
-- Add a larger config system for target management in v1.
-
-### Consequences
-- `scripts/grouped_evaluation.py` now reads `grouped_cv_preferred_setup_summary.csv` and uses `preferred_target_col`.
-- Grouped evaluation fails explicitly if preferred target metadata is missing or inconsistent.
-- `write_experiment_records` now validates preferred-target consistency against grouped summaries.
-- Classification records now include accuracy, macro F1, ECE, multiclass Brier, and abstention notes.
-- Regression records continue to include conformal coverage and interval-width diagnostics.
-
----
-
-## 2026-04-17 Task-specific modeling tables for regression and classification
-### Decision
-Keep one shared upstream telemetry/feature pipeline, but split downstream processed tables into:
-1. `data/processed/pamap2_model_table_regression.parquet`
-2. `data/processed/pamap2_model_table_classification.parquet`
-
-### Why
-Classification predicts current activity and should use all rows valid for classification features and `activity_target`. It should not lose rows only because a future heart-rate regression target is missing.
-
-### Alternatives rejected
-- Keep one shared final filtered table for both tasks.
-- Keep classification tied to the preferred regression target filter.
-- Build a large multi-dataset framework.
-
-### Consequences
-- Compact ablation now writes task-specific processed tables from the same preferred upstream setup.
-- Grouped evaluation now reads both tables and evaluates each task on its own eligible rows under the same subject-grouped logic.
-- Added row-retention artifact: `artifacts/metrics/grouped_cv_task_table_row_summary.csv`.
-- Docs and schema contracts now explicitly describe why regression and classification diverge only at downstream row eligibility.
-
----
-
-## 2026-04-17 Add one online-ish delayed-HR evaluation mode
-### Decision
-Add one explicit online-ish sensitivity mode, `onlineish_hr_delay_5s`, that delays heart-rate availability by 5 seconds before feature generation.
-
-### Why
-Offline evaluation can overestimate performance when heart-rate inputs are treated as instantly available. A fixed 5-second delay is a realistic and lightweight way to test whether selected models still work when HR is stale.
-
-### Alternatives rejected
-- Building a streaming/event-driven simulator in v1
-- Adding multiple delay and packet-loss variants in v1
-- Adding cloud or real-time infrastructure for this check
-
-### Consequences
-- The compact ablation workflow now runs both:
-	- `offline_standard`
-	- `onlineish_hr_delay_5s`
-- New comparison artifacts are written:
-	- `artifacts/metrics/grouped_cv_onlineish_comparison_summary.csv`
-	- `artifacts/metrics/grouped_cv_onlineish_regression_activity_delta.csv`
-	- `artifacts/figures/grouped_cv_onlineish_comparison.png`
-- Headline result from current run:
-	- regression MAE increased by about `+0.734` bpm under delayed HR
-	- classification changes remained small in this mode
-- This remains a lightweight simulation only; it does not prove production streaming readiness.
+### consequences
+The repo reports how metrics shift under a simple delayed-input scenario without expanding into streaming infrastructure.
